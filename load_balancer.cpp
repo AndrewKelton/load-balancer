@@ -6,6 +6,7 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <atomic>
 
 #define MAX_NUM_SERVERS 3
 #define MAX_FAILURE_COUNT 5
@@ -18,12 +19,13 @@ const char * health_check = "GET /health HTTP/1.1";
 using health_status = int;
 
 struct ServerTracker {
-    int port;
-    int failure_count = 0;
-    health_status status = HEALTHY; // 1 == healthy, 2 == iffy, 3 == ded
+    int port; // 9001, 9002, ...
+    int failure_count = 0; // # of times this server has consecutively failed health checks
+    std::atomic<health_status> status = HEALTHY; // 1 == healthy, 2 == iffy, 3 == ded
 };
 using server_tracker_t = ServerTracker;
 
+/* Creates address for a socket */
 sockaddr_in create_address(int port) {
     sockaddr_in address = {};
     address.sin_family = AF_INET;
@@ -32,6 +34,10 @@ sockaddr_in create_address(int port) {
     return address;
 }
 
+/* Connects to the server specified and sends a health check using 
+ * the /health endpoint. If a server returns 200 OK, then that server
+ * is considered HEALTHY, if it returns anything else, then it is DED.
+ */
 bool send_health_check(server_tracker_t& server) {
 
     int server_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -45,9 +51,9 @@ bool send_health_check(server_tracker_t& server) {
         }
 
         if (server.failure_count > 2) {
-            server.status = DED;
+            server.status.store(DED);
         } else {
-            server.status = IFFY;
+            server.status.store(IFFY);
         }
 
         return false; // return unsuccessful health check
@@ -55,9 +61,9 @@ bool send_health_check(server_tracker_t& server) {
 
     if (server.failure_count > 0) {
         --server.failure_count;
-        server.status = IFFY;
+        server.status.store(IFFY);
     } else {
-        server.status = HEALTHY;
+        server.status.store(HEALTHY);
     }
 
     // send health check
@@ -69,13 +75,15 @@ bool send_health_check(server_tracker_t& server) {
 
     std::string buffer_view = buffer;
     if (buffer_view.find("200") == std::string_view::npos) {
-       server.status = DED;
-       return false;
+       server.status.store(DED);
+
+       return false; // return unsuccessful health check
     } 
 
-    return true;
+    return true; // return successful health check
 }
 
+/* Wrapper function to send health checks to all servers in the list of servers*/
 void send_health_checks(std::vector<server_tracker_t>& servers) {
 
     std::cout << "Health Checks:" << std::endl;
@@ -86,12 +94,39 @@ void send_health_checks(std::vector<server_tracker_t>& servers) {
     }
 }
 
-// worker to send health checks to the servers every 2 seconds
+/* worker to send health checks to the servers every 2 seconds */
 void health_check_worker(std::vector<server_tracker_t>& servers) {
     while (true) {
         send_health_checks(servers);
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
+}
+
+/* Locates and returns the index of the next healthy server in the list of servers.
+ * If no healthy server is found in the list of servers, returns -1.
+ */
+int get_next_healthy_server(int initial_server, std::vector<server_tracker_t>& servers) {
+
+    int current_server = initial_server;
+    int count = 0;
+
+    while (servers.at(current_server).status.load() == DED || servers.at(current_server).status.load() == IFFY) {
+        current_server++;
+        count++;
+        if (current_server >= MAX_NUM_SERVERS) { // cannot exceed max number of servers
+            current_server = 0;
+        }
+
+        if (count > MAX_NUM_SERVERS) {
+            break;
+        }
+    }
+
+    if (count > MAX_NUM_SERVERS) {
+        return -1;
+    }
+
+    return current_server;
 }
 
 int main() {
@@ -112,8 +147,16 @@ int main() {
     // set SO_REUSEADDR on the socket to true
     int optval = 1;
     if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
-        std::cerr << "Error setting socket options" << std::endl;
+        std::cerr << "Error setting reuse socket" << std::endl;
         return 1;
+    }
+
+    // set timeout for receiving data
+    struct timeval timeout;
+    timeout.tv_sec = 3;
+    timeout.tv_usec = 0;
+    if (setsockopt(server_socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+        std::cerr << "Error setting receive timeout" << std::endl;
     }
 
     // 2. Bind the socket to local IP and port 8080
@@ -167,48 +210,49 @@ int main() {
         // create socket for backend connection
         int backend_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-        // continue to next server in list if current server is unhealthy
-        while (servers[current_server].status == DED) {
-            current_server++;
-            if (current_server >= MAX_NUM_SERVERS) { // cannot exceed max number of servers
-                current_server = 0;
+        // get the next healthy server
+        current_server = get_next_healthy_server(current_server, servers);
+
+        std::string response;
+
+        if (current_server < 0) {
+            // no server is healthy
+            std::cerr << "No servers available" << std::endl;
+            response = "HTTP/1.1 503 Service Unavailable\r\n";
+        } else {
+
+            // create address for backend
+            sockaddr_in server_address = create_address(servers[current_server].port);
+            server_address.sin_port = htons(servers[current_server].port);
+
+            char server_buffer[1024] = {0}; // 
+
+            // connect to the backend
+            if (connect(backend_socket, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
+                std::cerr << "Could not connect to backend server on port " << servers[current_server].port << std::endl;
+                response = "HTTP/1.1 503 Service Unavailable\r\n";
+            } else {
+                std::cout << "Connected to: " << std::endl << "IP: " << server_address.sin_family << std::endl << "Port: " << servers.at(current_server).port << std::endl;
+
+                // send message to backend
+                int bytes_sent = send(backend_socket, client_buffer, 1024, 0); 
+
+                // receive response from backend
+                int received_status = recv(backend_socket, server_buffer, 1024, 0);
+                
+                if (received_status < 0) {
+                    std::cerr << "Error receiving data from backend" << std::endl;
+                    response = "HTTP/1.1 503 Service Unavailable\r\n";
+                } else if (received_status == 0) {
+                    std::cerr << "Remote connection has closed its connection!" << std::endl;
+                    response = "HTTP/1.1 503 Service Unavailable\r\n";
+                } else {
+                    response = server_buffer;
+                }
             }
         }
 
-        // create address for backend
-        sockaddr_in server_address = create_address(servers[current_server].port);
-        server_address.sin_port = htons(servers[current_server].port);
-
-        // connect to the backend
-        if (connect(backend_socket, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
-            std::cerr << "Could not connect to backend server on port " << servers[current_server].port << std::endl;
-            current_server++;
-            continue;
-        }
-        std::cout << "Connected to: " << std::endl << "IP: " << server_address.sin_family << std::endl << "Port: " << servers.at(current_server).port << std::endl;
-
-        std::string message = "hello " + std::to_string(servers[current_server].port);
-
-        // send message to backend
-        int bytes_sent = send(backend_socket, client_buffer, 1024, 0); 
-
-        char buffer[1024] = {0};
-
-        // receive response from backend
-        int received_status = recv(backend_socket, buffer, 1024, 0);
-        
-        if (received_status < 0) {
-            std::cerr << "Error receiving data from backend" << std::endl;
-            continue;
-        } else if (received_status == 0) {
-            std::cerr << "Remote connection has closed its connection!" << std::endl;
-            continue;
-        }
-
-        std::string buffer_string = buffer;
-        std::string http_response = buffer;
-
-        write(client_socket, http_response.c_str(), http_response.length());
+        write(client_socket, response.c_str(), response.length());
         close(client_socket);
 
         current_server++;
