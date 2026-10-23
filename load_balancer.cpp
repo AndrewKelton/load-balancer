@@ -4,11 +4,16 @@
 #include <unistd.h>
 #include <cstring>
 #include <vector>
+#include <thread>
+#include <chrono>
 
 #define MAX_NUM_SERVERS 3
+#define MAX_FAILURE_COUNT 5
 #define HEALTHY 1
 #define IFFY 2
 #define DED 3
+
+const char * health_check = "GET /health HTTP/1.1";
 
 using health_status = int;
 
@@ -27,50 +32,65 @@ sockaddr_in create_address(int port) {
     return address;
 }
 
+bool send_health_check(server_tracker_t& server) {
+
+    int server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in address = create_address(server.port);
+
+    if (connect(server_socket, (struct sockaddr*)&address, sizeof(address)) < 0) {
+        std::cerr << "Could not connect to server on port " << server.port << std::endl;
+        
+        if (server.failure_count < MAX_FAILURE_COUNT) {
+            ++server.failure_count;
+        }
+
+        if (server.failure_count > 2) {
+            server.status = DED;
+        } else {
+            server.status = IFFY;
+        }
+
+        return false; // return unsuccessful health check
+    }
+
+    if (server.failure_count > 0) {
+        --server.failure_count;
+        server.status = IFFY;
+    } else {
+        server.status = HEALTHY;
+    }
+
+    // send health check
+    int bytes_sent = send(server_socket, health_check, 1024, 0); 
+    
+    char buffer[1024] = {0};
+    // receive response from backend
+    int received_status = recv(server_socket, buffer, 1024, 0);
+
+    std::string buffer_view = buffer;
+    if (buffer_view.find("200") == std::string_view::npos) {
+       server.status = DED;
+       return false;
+    } 
+
+    return true;
+}
+
 void send_health_checks(std::vector<server_tracker_t>& servers) {
 
     std::cout << "Health Checks:" << std::endl;
-    const char * health_check = "GET /health HTTP/1.1";
     
     for (int i = 0; i < servers.size(); i++) {
-
-        int server_socket = socket(AF_INET, SOCK_STREAM, 0);
-        sockaddr_in address = create_address(servers.at(i).port);
-
-        // connect to the server
-        if (connect(server_socket, (struct sockaddr*)&address, sizeof(address)) < 0) {
-            std::cerr << "Could not connect to backend server on port " << servers.at(i).port << std::endl;
-            servers.at(i).failure_count++;
-            
-            if (servers.at(i).failure_count > 2) {
-                servers.at(i).status = DED;
-                std::cout << "Port: " << servers.at(i).port << std::endl << "Status: DED" << std::endl << std::endl;
-            } else {
-                servers.at(i).status = IFFY;
-                i--;
-            }
-            continue;
-        } else {
-            if (servers.at(i).failure_count > 0) {
-                servers.at(i).failure_count--;
-                servers.at(i).status = IFFY;
-            } else {
-                servers.at(i).status = HEALTHY;
-            }
-        }
-        // send health check
-        int bytes_sent = send(server_socket, health_check, 1024, 0); 
-        
-        char buffer[1024] = {0};
-        // receive response from backend
-        int received_status = recv(server_socket, buffer, 1024, 0);
-
-        std::string buffer_view = buffer;
-        if (buffer_view.find("200") == std::string_view::npos) {
-            servers.at(i).status = DED;
-        } 
-
+        send_health_check(servers.at(i));
         std::cout << "Port: " << servers.at(i).port << std::endl << "Status: " << servers.at(i).status << std::endl << std::endl;
+    }
+}
+
+// worker to send health checks to the servers every 2 seconds
+void health_check_worker(std::vector<server_tracker_t>& servers) {
+    while (true) {
+        send_health_checks(servers);
+        std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 }
 
@@ -118,10 +138,13 @@ int main() {
 
     int current_server = 0;
 
+    // Create health check worker
+    std::thread health_worker([&servers]() {
+        health_check_worker(std::ref(servers));
+    });
+
     // 4. Accept a connection loop
     while (true) {
-
-        send_health_checks(servers); // check server healths
 
         int address_len = sizeof(address);
         int client_socket = accept(server_socket, (struct sockaddr*)&address, (socklen_t*)&address_len);
@@ -191,5 +214,7 @@ int main() {
         current_server++;
     }
 
-    close(server_socket);
+    health_worker.join(); // stop the health check worker
+
+    close(server_socket); // close socket
 }
