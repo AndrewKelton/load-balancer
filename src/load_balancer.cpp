@@ -88,8 +88,6 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
     std::string buffer_view = buffer;
     if (buffer_view.find("200") == std::string_view::npos) {
        server.status.store(ServerHealthStatus::FAILED);
-    } else {
-        server.status.store(ServerHealthStatus::OK);
     }
 }
 
@@ -144,7 +142,7 @@ bool load_balancer::LoadBalancer::start_listen() {
     });
     
     while (true) {
-        
+
         int address_len = sizeof(this->address); // get address length
 
         int client_socket = accept(this->socket_lb,  (struct sockaddr*)&this->address, (socklen_t*)&address_len);
