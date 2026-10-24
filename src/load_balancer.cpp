@@ -1,6 +1,5 @@
 #include "load_balancer.hpp"
 
-
 bool load_balancer::LoadBalancer::setup_server(int port) {
     
     this->socket_lb = socket(AF_INET, SOCK_STREAM, 0);

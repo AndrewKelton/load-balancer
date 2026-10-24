@@ -57,7 +57,6 @@ class LoadBalancer {
         */
         bool get_next_healthy_server();
 
-
     public:
 
         LoadBalancer(std::vector<int> backend_ports, int port = 8080) {
