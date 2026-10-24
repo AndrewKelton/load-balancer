@@ -196,10 +196,12 @@ bool load_balancer::LoadBalancer::start_listen() {
                     response = server_buffer;
                 }
             }
+
+            close(backend_socket); // close backend socket
         }
 
         write(client_socket, response.c_str(), response.size());
-        close(client_socket);
+        close(client_socket); // close client socket
         
         ++this->current_server;
     }
