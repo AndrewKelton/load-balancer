@@ -22,7 +22,7 @@ enum class ServerHealthStatus {
     FAILED
 };
 
-inline constexpr const char * health_endpoint = "GET /health HTTP/1.1";
+inline constexpr const char * health_endpoint = "GET /health HTTP/1.1\r\n";
 
 struct server_info_t {
     int port;

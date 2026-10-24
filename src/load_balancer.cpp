@@ -83,7 +83,7 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
     
     char buffer[1024] = {0};
     // receive response from backend
-    int received_status = recv(server_socket, buffer, 1024, 0);
+    int received_status = recv(server_socket, buffer, 22, 0);
 
     std::string buffer_view = buffer;
     if (buffer_view.find("200") == std::string_view::npos) {
