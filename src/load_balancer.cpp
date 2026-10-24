@@ -105,21 +105,22 @@ void load_balancer::LoadBalancer::health_checker() {
 
 bool load_balancer::LoadBalancer::get_next_healthy_server() {
     int count = 0; 
+    int max_servers = this->servers.size();
 
     while (this->servers.at(this->current_server).status.load() == ServerHealthStatus::FAILED || this->servers.at(this->current_server).status.load() == ServerHealthStatus::DEGRADED) {
         ++this->current_server;
         ++count;
 
-        if (this->current_server >= MAX_NUM_SERVERS) {
+        if (this->current_server >= max_servers) {
             this->current_server = 0; // go back to front
         }
 
-        if (count > MAX_NUM_SERVERS) {
+        if (count > max_servers) {
             break;
         }
     }
 
-    if (count > MAX_NUM_SERVERS) {
+    if (count > max_servers) {
         this->current_server = -1;
         return false;
     }
@@ -130,7 +131,7 @@ bool load_balancer::LoadBalancer::get_next_healthy_server() {
 bool load_balancer::LoadBalancer::start_listen() {
 
     // start listening for incoming connections
-    if (listen(this->socket_lb, 0) < 0) {
+    if (listen(this->socket_lb, 3) < 0) {
         std::cerr << "Error listening for incoming connections" << std::endl;
         return false;
     }
@@ -142,13 +143,13 @@ bool load_balancer::LoadBalancer::start_listen() {
         this->health_checker();
     });
     
-    int address_len = sizeof(this->address); // get address length
-
     while (true) {
+        
+        int address_len = sizeof(this->address); // get address length
 
         int client_socket = accept(this->socket_lb,  (struct sockaddr*)&this->address, (socklen_t*)&address_len);
         if (client_socket < 0) {
-            // should probably do something here
+            close(client_socket);
             continue;
         }
 
