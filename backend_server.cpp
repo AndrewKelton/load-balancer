@@ -3,41 +3,40 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <cstring>
+#include <unordered_map>
 
-#define GET 1
-#define POST 2
-#define DELETE 3
+enum class HTTPMethod {
+    GET // only supports GET for now
+};
 
-using method_type = int;
+enum class HttpStatusCode {
+  Ok = 200,
+  BadRequest = 400,
+  InternalServerError = 500,
+  BadGateway = 502,
+  ServiceUnvailable = 503,
+};
 
-struct HTTP_Request_Info {
-    method_type method;
+struct Request {
+    std::string method;
     std::string path_uri;
     std::string version;
+    std::unordered_map<std::string, std::string> headers;
 };
-using http_request_info_t = HTTP_Request_Info;
 
-int decode_method(const std::string_view& meth) {
-    if (meth == "GET") {
-        return GET;
-    } else if (meth == "POST") {
-        return POST;
-    } else if (meth == "DELETE") {
-        return DELETE;
-    }
-    return -1;
-}
+struct Reponse {
+    int status_code = 200;
+    std::string body;
+    std::unordered_map<std::string, std::string> headers;
+};
 
-http_request_info_t extract_from_request_line(const std::string_view& line) {
-
-    http_request_info_t request;
+Request extract_from_request_line(const std::string_view& line) {
 
     int method_end = line.find(' ');
-    std::string_view meth = line.substr(0, method_end);
-    
     int path_end = line.substr(method_end + 1).find(' ');
     
-    request.method = decode_method(meth);
+    Request request;
+    request.method = line.substr(0, method_end);
     request.path_uri = line.substr(method_end + 1, path_end);
     request.version = "HTTP/1.1"; // can ignore actual version for now
 
@@ -54,10 +53,10 @@ std::string_view get_request_line(const std::string_view& buffer) {
     return buffer.substr(0, end);
 }
 
-std::string get_response(http_request_info_t request_info, std::string port) {
+std::string get_response(Request request, std::string port) {
     
     // what is our response for this endpoint
-    if (request_info.path_uri == "/health") {
+    if (request.path_uri == "/health") {
         return "HTTP/1.1 200 OK\r\n";
     } 
     return 
@@ -124,8 +123,8 @@ int main(int argc, char * argv[]) {
         read(client_socket, buffer, 1024);
         std::cout << "Received Request: " << std::endl << buffer << std::endl;
 
-        http_request_info_t request_info = extract_from_request_line(get_request_line(buffer));
-        std::string http_response = get_response(request_info, port_string);
+        Request request = extract_from_request_line(get_request_line(buffer));
+        std::string http_response = get_response(request, port_string);
 
         write(client_socket, http_response.c_str(), http_response.length());
         close(client_socket); // close connection for this request
