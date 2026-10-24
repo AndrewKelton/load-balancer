@@ -27,6 +27,7 @@ using server_tracker_t = ServerTracker;
 
 /* Creates address for a socket */
 sockaddr_in create_address(int port) {
+
     sockaddr_in address = {};
     address.sin_family = AF_INET;
     address.sin_port = htons(port);
@@ -117,7 +118,7 @@ int get_next_healthy_server(int initial_server, std::vector<server_tracker_t>& s
             current_server = 0;
         }
 
-        if (count > MAX_NUM_SERVERS) {
+        if (count > MAX_NUM_SERVERS) { // get out of inf loop
             break;
         }
     }
@@ -242,10 +243,10 @@ int main() {
                 
                 if (received_status < 0) {
                     std::cerr << "Error receiving data from backend" << std::endl;
-                    response = "HTTP/1.1 503 Service Unavailable\r\n";
+                    response = "HTTP/1.1 502 Bad Gateway\r\n";
                 } else if (received_status == 0) {
                     std::cerr << "Remote connection has closed its connection!" << std::endl;
-                    response = "HTTP/1.1 503 Service Unavailable\r\n";
+                    response = "HTTP/1.1 502 Bad Gateway\r\n";
                 } else {
                     response = server_buffer;
                 }
