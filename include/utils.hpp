@@ -13,6 +13,7 @@ struct request_t {
     std::unordered_map<std::string, std::string> headers;
 };
 
+/* Parses a request from the buffer and returns a request_t structure */
 request_t parse_request(const std::string& buffer);
 
 #endif
