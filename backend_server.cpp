@@ -5,65 +5,20 @@
 #include <cstring>
 #include <unordered_map>
 
-enum class HTTPMethod {
-    GET // only supports GET for now
-};
+#include "utils.hpp"
 
-enum class HttpStatusCode {
-  Ok = 200,
-  BadRequest = 400,
-  InternalServerError = 500,
-  BadGateway = 502,
-  ServiceUnvailable = 503,
-};
-
-struct Request {
-    std::string method;
-    std::string path_uri;
-    std::string version;
-    std::unordered_map<std::string, std::string> headers;
-};
-
-struct Reponse {
-    int status_code = 200;
-    std::string body;
-    std::unordered_map<std::string, std::string> headers;
-};
-
-Request extract_from_request_line(const std::string_view& line) {
-
-    int method_end = line.find(' ');
-    int path_end = line.substr(method_end + 1).find(' ');
-    
-    Request request;
-    request.method = line.substr(0, method_end);
-    request.path_uri = line.substr(method_end + 1, path_end);
-    request.version = "HTTP/1.1"; // can ignore actual version for now
-
-    return request;
-}
-
-std::string_view get_request_line(const std::string_view& buffer) {
-
-    size_t end = buffer.find("\r\n");
-    if (end == std::string_view::npos) { 
-        return "";
-    }
-
-    return buffer.substr(0, end);
-}
-
-std::string get_response(Request request, std::string port) {
+std::string get_response(request_t request, std::string port) {
     
     // what is our response for this endpoint
     if (request.path_uri == "/health") {
         return "HTTP/1.1 200 OK\r\n";
     } 
-    return 
+    std::string body = "Hello from port: " + port;
+    return
     "HTTP/1.1 200 OK\r\n"
     "Content-Type: text/plain\r\n"
-    "Content-Length: 21\r\n\r\n"
-    "Hello from port: " + port;
+    "Content-Length: " + std::to_string(body.size()) + "\r\n"
+    "\r\n" + body;
 }
 
 int main(int argc, char * argv[]) {
@@ -123,7 +78,17 @@ int main(int argc, char * argv[]) {
         read(client_socket, buffer, 1024);
         std::cout << "Received Request: " << std::endl << buffer << std::endl;
 
-        Request request = extract_from_request_line(get_request_line(buffer));
+        request_t request = parse_request(buffer);
+
+
+        // std::cout << "\nParsing request" << std::endl;
+        // request_t request_parsed = parse_request(buffer);
+        // std::cout << "Method = " << request_parsed.method << " URI = " << request_parsed.path_uri << " Version = " << request_parsed.version << std::endl;
+        // std::cout << "Headers:" << std::endl;
+        // for (const auto header : request_parsed.headers) {
+        //     std::cout << header.first << " " << header.second << std::endl;
+        // }
+
         std::string http_response = get_response(request, port_string);
 
         write(client_socket, http_response.c_str(), http_response.length());
