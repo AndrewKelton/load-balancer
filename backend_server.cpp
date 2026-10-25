@@ -78,18 +78,9 @@ int main(int argc, char * argv[]) {
         read(client_socket, buffer, 1024);
         std::cout << "Received Request: " << std::endl << buffer << std::endl;
 
-        request_t request = parse_request(buffer);
+        request_t request = parse_request(buffer); // parse the request
 
-
-        // std::cout << "\nParsing request" << std::endl;
-        // request_t request_parsed = parse_request(buffer);
-        // std::cout << "Method = " << request_parsed.method << " URI = " << request_parsed.path_uri << " Version = " << request_parsed.version << std::endl;
-        // std::cout << "Headers:" << std::endl;
-        // for (const auto header : request_parsed.headers) {
-        //     std::cout << header.first << " " << header.second << std::endl;
-        // }
-
-        std::string http_response = get_response(request, port_string);
+        std::string http_response = get_response(request, port_string); // get the htpp response
 
         write(client_socket, http_response.c_str(), http_response.length());
         close(client_socket); // close connection for this request
