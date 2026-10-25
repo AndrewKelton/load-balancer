@@ -37,12 +37,10 @@ request_t parse_request(const std::string& buffer) {
     size_t position = buffer.find('\n');
 
    while (position != std::string::npos) {
-        // std::cout << buffer.substr(indices[prev++], position - 1);
         lines.push_back(buffer.substr(indices[prev++], position - 1));
         indices.push_back(position);
 
         position = buffer.find('\n', position + 1);
-        // position = buffer.find("\r\n", position + 2);
     }
 
     request_t request = parse_request_line(lines[0], std::vector<std::string>(lines.begin() + 1, lines.end()));
