@@ -67,11 +67,7 @@ class LoadBalancer {
             for (int i = 0; i < backend_ports.size(); ++i) {
                 this->servers[i].port = backend_ports[i];
             }
-
-            for (int i = 0; i < this->servers.size(); ++i) {
-                std::cout << "Port: " << this->servers[i].port << std::endl;
-            }
-
+            
             if (!setup_server(port)) {
                 std::cerr << "Error setting up server!" << std::endl;
                 exit(1);
