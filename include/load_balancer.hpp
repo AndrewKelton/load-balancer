@@ -34,6 +34,7 @@ struct server_info_t {
 
 class LoadBalancer {
     private:
+    
         std::vector<server_info_t> servers; // this might be better as a circular linked list
         int socket_lb;
         sockaddr_in address;
@@ -52,8 +53,9 @@ class LoadBalancer {
         /* worker to send health checks to the servers every 2 seconds */
         void health_checker();
 
-        /* Locates and returns the index of the next healthy server in the list of servers.
-        * If no healthy server is found in the list of servers, returns -1.
+        /* Locates and sets current_server to the index of the next healthy server 
+         * in the list of servers. If no healthy server is found in the list of 
+         * servers, returns -1.
         */
         bool get_next_healthy_server();
 
@@ -67,7 +69,7 @@ class LoadBalancer {
             for (int i = 0; i < backend_ports.size(); ++i) {
                 this->servers[i].port = backend_ports[i];
             }
-            
+
             if (!setup_server(port)) {
                 std::cerr << "Error setting up server!" << std::endl;
                 exit(1);
