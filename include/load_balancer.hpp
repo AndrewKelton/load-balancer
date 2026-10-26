@@ -11,6 +11,8 @@
 #include <chrono>
 #include <atomic>
 
+#include "utils.hpp"
+
 #define MAX_NUM_SERVERS 3
 #define MAX_FAILURE_COUNT 5
 

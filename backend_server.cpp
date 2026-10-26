@@ -11,14 +11,14 @@ std::string get_response(request_t request, std::string port) {
     
     // what is our response for this endpoint
     if (request.path_uri == "/health") {
-        return "HTTP/1.1 200 OK\r\n";
+        return "HTTP/1.1 200 OK\r\n"; // as of now just send healthy response
     } 
     std::string body = "Hello from port: " + port;
     return
-    "HTTP/1.1 200 OK\r\n"
-    "Content-Type: text/plain\r\n"
-    "Content-Length: " + std::to_string(body.size()) + "\r\n"
-    "\r\n" + body;
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: " + std::to_string(body.size()) + "\r\n"
+        "\r\n" + body;
 }
 
 int main(int argc, char * argv[]) {
@@ -74,11 +74,26 @@ int main(int argc, char * argv[]) {
         }
 
         // Read incoming request data
-        char buffer[1024] = {0};
-        read(client_socket, buffer, 1024);
+        std::string full_buffer;
+        char buffer[LARGE_BUFFER_SIZE] = {0};
+        ssize_t bytes_read = read(client_socket, buffer, LARGE_BUFFER_SIZE);
+
+        if (bytes_read <= 0) { // do nothing
+            close(client_socket);
+            continue;
+        }
+
+        /* Have to do this differently for read(), need to read until blank
+         * line "\r\n\r\n" is received. 
+         */
+        // while (bytes_read > 0) {
+        full_buffer.append(buffer, bytes_read);
+        //     bytes_read = read(client_socket, buffer, LARGE_BUFFER_SIZE);
+        // }
+
         std::cout << "Received Request: " << std::endl << buffer << std::endl;
 
-        std::string response;
+        std::string response; 
         request_t request = parse_request(buffer); // parse the request
         if (request.method.empty()) {
             response = "HTTP/1.1 400 Bad Request"; // request was malformed
@@ -86,7 +101,7 @@ int main(int argc, char * argv[]) {
             response = get_response(request, port_string); // get the response
         }
 
-        write(client_socket, response.c_str(), response.length());
+        write(client_socket, response.c_str(), response.size());
         close(client_socket); // close connection for this request
     }
 

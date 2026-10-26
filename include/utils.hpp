@@ -6,6 +6,9 @@
 #include <vector>
 #include <iostream>
 
+#define SMALL_BUFFER_SIZE 128
+#define LARGE_BUFFER_SIZE 1024
+
 struct request_t {
     std::string method;
     std::string path_uri;
