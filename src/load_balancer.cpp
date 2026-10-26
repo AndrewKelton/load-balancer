@@ -150,7 +150,6 @@ bool load_balancer::LoadBalancer::start_listen() {
 
         int client_socket = accept(this->socket_lb,  (struct sockaddr*)&this->address, (socklen_t*)&address_len);
         if (client_socket < 0) {
-            close(client_socket);
             continue;
         }
 
