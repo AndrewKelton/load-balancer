@@ -3,7 +3,8 @@
 #include <string_view>
 
 namespace {
-    // Strip leading + trailing white space and tabs
+    /* Strip leading + trailing white space and tabs
+     */
     std::string_view trim(std::string_view s) {
 
         const char * ws = " \t";
@@ -18,8 +19,8 @@ namespace {
     }
 
     /* Split the buffer into lines on "\n", dropping a trialing "\r" from each.
-    * Stops at the first empty line (end of headers) or end of buffer.
-    */
+     * Stops at the first empty line (end of headers) or end of buffer.
+     */
     std::vector<std::string_view> split_header_lines(std::string_view buffer) {
         
         std::vector<std::string_view> lines;
@@ -50,7 +51,8 @@ namespace {
         return lines;
     }
 
-    /* "GET /path HTTP 1.1" -> method, path, version. Returns false if malformed */
+    /* "GET /path HTTP 1.1" -> method, path, version. Returns false if malformed 
+     */
     bool parse_request_line(std::string_view line, request_t& request) {
 
         size_t sp1 = line.find(' ');
