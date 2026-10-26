@@ -13,6 +13,7 @@
 
 #define MAX_NUM_SERVERS 3
 #define MAX_FAILURE_COUNT 5
+#define HEALTH_CHECK_INTERVAL_S 2
 
 namespace load_balancer {
 
