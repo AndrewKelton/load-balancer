@@ -67,19 +67,19 @@ int main(int argc, char * argv[]) {
     // 4. Accept a connection loop
     while (true) {
         int address_len = sizeof(address);
-        int client_socket = accept(server_fd, (struct sockaddr*)&address, (socklen_t*)&address_len);
+        int client_fd = accept(server_fd, (struct sockaddr*)&address, (socklen_t*)&address_len);
 
-        if (client_socket < 0) {
+        if (client_fd < 0) {
             continue;
         }
 
         // Read incoming request data
         std::string full_buffer;
         char buffer[LARGE_BUFFER_SIZE] = {0};
-        ssize_t bytes_read = read(client_socket, buffer, LARGE_BUFFER_SIZE);
+        ssize_t bytes_read = read(client_fd, buffer, LARGE_BUFFER_SIZE);
 
         if (bytes_read <= 0) { // do nothing
-            close(client_socket);
+            close(client_fd);
             continue;
         }
 
@@ -88,7 +88,7 @@ int main(int argc, char * argv[]) {
          */
         // while (bytes_read > 0) {
         full_buffer.append(buffer, bytes_read);
-        //     bytes_read = read(client_socket, buffer, LARGE_BUFFER_SIZE);
+        //     bytes_read = read(client_fd, buffer, LARGE_BUFFER_SIZE);
         // }
 
         std::cout << "Received Request: " << std::endl << buffer << std::endl;
@@ -101,8 +101,8 @@ int main(int argc, char * argv[]) {
             response = get_response(request, port_string); // get the response
         }
 
-        write(client_socket, response.c_str(), response.size());
-        close(client_socket); // close connection for this request
+        write(client_fd, response.c_str(), response.size());
+        close(client_fd); // close connection for this request
     }
 
     close(server_fd); // close server socket
