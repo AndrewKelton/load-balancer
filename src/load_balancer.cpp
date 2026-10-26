@@ -106,25 +106,24 @@ bool load_balancer::LoadBalancer::get_next_healthy_server() {
     int count = 0; 
     int max_servers = this->servers.size();
 
-    while (this->servers.at(this->current_server).status.load() == ServerHealthStatus::FAILED || this->servers.at(this->current_server).status.load() == ServerHealthStatus::DEGRADED) {
-        ++this->current_server;
-        ++count;
-
-        if (this->current_server >= max_servers) {
-            this->current_server = 0; // go back to front
-        }
-
-        if (count > max_servers) {
-            break;
+    while (count < max_servers) {
+        if (this->servers.at(this->current_server).status.load() == ServerHealthStatus::FAILED || this->servers.at(this->current_server).status.load() == ServerHealthStatus::DEGRADED) {
+            ++count;
+            
+            if (this->current_server >= max_servers) {
+                this->current_server = 0;
+            } else {
+                ++this->current_server;
+            }
+            
+        } else {
+            return true; // active healthy server found
         }
     }
 
-    if (count > max_servers) {
-        this->current_server = -1;
-        return false;
-    }
-
-    return true;
+    // no active server found
+    this->current_server = -1; 
+    return false;
 }
 
 bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_running) {
