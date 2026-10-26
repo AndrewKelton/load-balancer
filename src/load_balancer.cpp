@@ -107,15 +107,15 @@ bool load_balancer::LoadBalancer::get_next_healthy_server() {
     int max_servers = this->servers.size();
 
     while (count < max_servers) {
+        // std::cout << "current_server = " << this->current_server << std::endl;
         if (this->servers.at(this->current_server).status.load() == ServerHealthStatus::FAILED || this->servers.at(this->current_server).status.load() == ServerHealthStatus::DEGRADED) {
             ++count;
-            
+            ++this->current_server;
+
             if (this->current_server >= max_servers) {
                 this->current_server = 0;
-            } else {
-                ++this->current_server;
             }
-            
+
         } else {
             return true; // active healthy server found
         }
@@ -181,18 +181,36 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
             response = "HTTP/1.1 503 Service Unavailable\r\n";
         } else {
             // create address for backend
-            sockaddr_in server_address = create_address(servers[current_server].port);
-            server_address.sin_port = htons(servers[current_server].port);
-            
-            // connect to the backend
-            if (connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
+            // std::cout << "current_server = " << this->current_server << std::endl;
+            sockaddr_in server_address = create_address(this->servers[this->current_server].port);
+
+            int retries = 1;
+            int connection_status = connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address));
+
+            while (connection_status < 0 && retries < this->servers.size()) {
+                close(backend_fd);
+
+                ++this->current_server;
+                ++retries;
+
+
+                if (this->current_server > this->servers.size() - 1) {
+                    this->current_server = 0;
+                }
+                
+                backend_fd = socket(AF_INET, SOCK_STREAM, 0);
+                server_address = create_address(this->servers[this->current_server].port);
+                connection_status = connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address));
+            }
+
+            if (connection_status < 0) {
                 std::cerr << "Could not connect to backend server on port " << servers[current_server].port << std::endl;
                 response = 
                     "HTTP/1.1 503 Service Unavailable\r\n"
                     "Content-Type: text/plain\r\n"
                     "Content-Length: 20\r\n"
                     "No Backend Available"
-                    ;
+                ;
             } else {
                 std::cout << "Connected to: " << std::endl << "IP: " << server_address.sin_family << std::endl << "Port: " << servers.at(current_server).port << std::endl;
                 
@@ -233,6 +251,8 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
 
     health_worker.join(); // stop the health check worker
     close(this->load_balancer_fd); // close socket
+
+    std::cout << std::endl << "Load Balancer on port " << this->port << " has closed its connection." << std::endl;
 
     return true;
 }
