@@ -5,13 +5,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <cstring>
 #include <vector>
 #include <thread>
 #include <chrono>
 #include <atomic>
-
-#include "utils.hpp"
+#include <csignal>
 
 #define MAX_NUM_SERVERS 3
 #define MAX_FAILURE_COUNT 5
@@ -24,6 +22,7 @@ namespace load_balancer {
         FAILED
     };
 
+    // health endpoint
     inline constexpr const char * health_endpoint = "GET /health HTTP/1.1\r\n";
 
     struct server_info_t {
@@ -39,10 +38,10 @@ namespace load_balancer {
         private:
 
             std::vector<server_info_t> servers; // this might be better as a circular linked list
-            int socket_lb;
-            sockaddr_in address;
-            int current_server;
-            int port;
+            int load_balancer_fd; // server_fd socket for load balancer
+            sockaddr_in address; // address for load balancer
+            int current_server; // current server index for active server
+            int port; // port to connect to ex. 8080
 
             /* Creates address for a socket */
             sockaddr_in create_address(int port);
@@ -54,7 +53,7 @@ namespace load_balancer {
             void send_health_check(server_info_t& server);
 
             /* worker to send health checks to the servers every 2 seconds */
-            void health_checker();
+            void health_checker(volatile std::sig_atomic_t& g_running);
 
             /* Locates and sets current_server to the index of the next healthy server 
             * in the list of servers. If no healthy server is found in the list of 
@@ -84,7 +83,7 @@ namespace load_balancer {
 
             /* Starts listening for incoming connections and loops waiting for incoming
             * client connections. */
-            bool start_listen();
+            bool start_listen(volatile std::sig_atomic_t& g_running);
     };
 };
 

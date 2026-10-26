@@ -1,16 +1,19 @@
 #include "load_balancer.hpp"
+#include "utils.hpp"
+
+#include <cstring>
 
 bool load_balancer::LoadBalancer::setup_server(int port) {
     
-    this->socket_lb = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_lb < 0) {
+    this->load_balancer_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (load_balancer_fd < 0) {
         std::cerr << "Socket creation failed" << std::endl;
         return false;
     }
 
     // set reuse address to true
     int optval = 1;
-    if (setsockopt(this->socket_lb, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+    if (setsockopt(this->load_balancer_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
         std::cerr << "Error setting reuse socket" << std::endl;
         return false;
     }
@@ -20,13 +23,13 @@ bool load_balancer::LoadBalancer::setup_server(int port) {
     timeout.tv_usec = 0;
 
     // set timeout for receiving data
-    if (setsockopt(this->socket_lb, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+    if (setsockopt(this->load_balancer_fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
         std::cerr << "Error setting receive timeout" << std::endl;
         return false;
     }
 
     // set timeout for sending data
-    if (setsockopt(this->socket_lb, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+    if (setsockopt(this->load_balancer_fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
         std::cerr << "Error setting send timeout" << std::endl;
         return false;
     }
@@ -34,7 +37,7 @@ bool load_balancer::LoadBalancer::setup_server(int port) {
     this->address = create_address(port);
     this->address.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(this->socket_lb, (struct sockaddr*)&address, sizeof(address)) < 0) {
+    if (bind(this->load_balancer_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
         std::cerr << "Error binding socket with IP and port" << std::endl;
         return false;
     }
@@ -72,26 +75,26 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
     } else {
         server.failure_count = 0;
         server.status.store(ServerHealthStatus::OK);
-    }
 
-    // send health check
-    int bytes_sent = send(server_socket, load_balancer::health_endpoint, strlen(load_balancer::health_endpoint) + 1, 0); 
-    
-    char buffer[SMALL_BUFFER_SIZE] = {0};
+        // send health check
+        int bytes_sent = send(server_socket, load_balancer::health_endpoint, strlen(load_balancer::health_endpoint) + 1, 0); 
+        
+        char buffer[SMALL_BUFFER_SIZE] = {0};
 
-    // receive response from backend
-    int received_status = recv(server_socket, buffer, SMALL_BUFFER_SIZE, 0);
+        // receive response from backend
+        int received_status = recv(server_socket, buffer, SMALL_BUFFER_SIZE, 0);
 
-    std::string_view buffer_view = buffer;
-    if (buffer_view.find("200") == std::string_view::npos) {
-       server.status.store(ServerHealthStatus::FAILED);
+        std::string_view buffer_view = buffer;
+        if (buffer_view.find("200") == std::string_view::npos) {
+        server.status.store(ServerHealthStatus::FAILED);
+        }
     }
 
     close(server_socket); // close server socket
 }
 
-void load_balancer::LoadBalancer::health_checker() {
-    while (true) {
+void load_balancer::LoadBalancer::health_checker(volatile std::sig_atomic_t& g_running) {
+    while (g_running) {
         for (int i = 0; i < this->servers.size(); ++i) {
             send_health_check(this->servers.at(i));
         }
@@ -125,10 +128,10 @@ bool load_balancer::LoadBalancer::get_next_healthy_server() {
     return true;
 }
 
-bool load_balancer::LoadBalancer::start_listen() {
+bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_running) {
 
     // start listening for incoming connections
-    if (listen(this->socket_lb, 3) < 0) {
+    if (listen(this->load_balancer_fd, 3) < 0) {
         std::cerr << "Error listening for incoming connections" << std::endl;
         return false;
     }
@@ -136,16 +139,19 @@ bool load_balancer::LoadBalancer::start_listen() {
     std::cout << "Load Balancer listening on port " << this->port << std::endl;
 
     // create health check worker
-    std::thread health_worker([this]() {
-        this->health_checker();
+    std::thread health_worker([this, &g_running]() {
+        this->health_checker(g_running);
     });
     
-    while (true) {
+    while (g_running) {
 
         int address_len = sizeof(this->address); // get address length
 
-        int client_socket = accept(this->socket_lb,  (struct sockaddr*)&this->address, (socklen_t*)&address_len);
+        int client_socket = accept(this->load_balancer_fd,  (struct sockaddr*)&this->address, (socklen_t*)&address_len);
         if (client_socket < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
             continue;
         }
 
@@ -229,7 +235,7 @@ bool load_balancer::LoadBalancer::start_listen() {
     }
 
     health_worker.join(); // stop the health check worker
-    close(this->socket_lb); // close socket
+    close(this->load_balancer_fd); // close socket
 
     return true;
 }
