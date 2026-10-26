@@ -86,8 +86,8 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
 
         std::string_view buffer_view = buffer;
         if (buffer_view.find("200") == std::string_view::npos) {
-        server.status.store(ServerHealthStatus::FAILED);
-        }
+            server.status.store(ServerHealthStatus::FAILED);
+            }
     }
 
     close(server_socket); // close server socket
@@ -174,7 +174,7 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
         // bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
         // }
 
-        int backend_socket = socket(AF_INET, SOCK_STREAM, 0);
+        int backend_fd = socket(AF_INET, SOCK_STREAM, 0);
         std::string response;
         
         if (!get_next_healthy_server() || this->current_server < 0) {
@@ -187,7 +187,7 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
             server_address.sin_port = htons(servers[current_server].port);
             
             // connect to the backend
-            if (connect(backend_socket, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
+            if (connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
                 std::cerr << "Could not connect to backend server on port " << servers[current_server].port << std::endl;
                 response = 
                 "HTTP/1.1 503 Service Unavailable\r\n"
@@ -199,11 +199,11 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
                 std::cout << "Connected to: " << std::endl << "IP: " << server_address.sin_family << std::endl << "Port: " << servers.at(current_server).port << std::endl;
                 
                 // send message to backend
-                ssize_t bytes_sent = send(backend_socket, full_client_buffer.c_str(), full_client_buffer.size(), 0); 
+                ssize_t bytes_sent = send(backend_fd, full_client_buffer.c_str(), full_client_buffer.size(), 0); 
                 
                 // receive response from backend
                 char server_buffer[LARGE_BUFFER_SIZE] = {0};
-                ssize_t bytes_received = recv(backend_socket, server_buffer, LARGE_BUFFER_SIZE, 0);
+                ssize_t bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
 
                 if (bytes_received < 0) {
                     std::cerr << "Error receiving data from backend" << std::endl;
@@ -216,14 +216,13 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
                     // receive all bytes until backend closes its connection
                     while (bytes_received > 0) {
                         response.append(server_buffer, bytes_received);
-                        bytes_received = recv(backend_socket, server_buffer, LARGE_BUFFER_SIZE, 0);
+                        bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
                     }
                 }
             }
-
-            close(backend_socket); // close backend socket
         }
 
+        close(backend_fd); // close backend socket
         write(client_fd, response.c_str(), response.size());
         close(client_fd); // close client socket
         
