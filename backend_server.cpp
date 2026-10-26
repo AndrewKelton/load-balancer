@@ -4,8 +4,12 @@
 #include <unistd.h>
 #include <cstring>
 #include <unordered_map>
+#include <csignal>
 
 #include "utils.hpp"
+
+static volatile std::sig_atomic_t g_running = 1;
+static void on_sigint(int) { g_running = 0; }
 
 std::string get_response(request_t request, std::string port) {
     
@@ -27,6 +31,13 @@ int main(int argc, char * argv[]) {
         std::cerr << "No port specified" << std::endl;
         return 1;
     }
+
+    // signal to stop server loop
+    struct sigaction sa{};
+    sa.sa_handler = on_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0; // no SA_RESTART, so accept() returns EINTR
+    sigaction(SIGINT, &sa, nullptr);
 
     int port = std::stoi(argv[1]);
     std::string port_string = argv[1];
@@ -65,7 +76,7 @@ int main(int argc, char * argv[]) {
     std::cout << "Server listening on port " << port << std::endl;
 
     // 4. Accept a connection loop
-    while (true) {
+    while (g_running) {
         int address_len = sizeof(address);
         int client_fd = accept(server_fd, (struct sockaddr*)&address, (socklen_t*)&address_len);
 
@@ -106,6 +117,8 @@ int main(int argc, char * argv[]) {
     }
 
     close(server_fd); // close server socket
+
+    std::cout << std::endl << "Server on port " << port << " has closed its connection." << std::endl;
 
     return 0;
 }
