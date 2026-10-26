@@ -71,7 +71,6 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
             server.status.store(ServerHealthStatus::DEGRADED);
         }
 
-        return; // return unsuccessful health check
     } else {
         server.failure_count = 0;
         server.status.store(ServerHealthStatus::OK);
@@ -87,7 +86,7 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
         std::string_view buffer_view = buffer;
         if (buffer_view.find("200") == std::string_view::npos) {
             server.status.store(ServerHealthStatus::FAILED);
-            }
+        }
     }
 
     close(server_socket); // close server socket
@@ -99,7 +98,7 @@ void load_balancer::LoadBalancer::health_checker(volatile std::sig_atomic_t& g_r
             send_health_check(this->servers.at(i));
         }
 
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        std::this_thread::sleep_for(std::chrono::seconds(HEALTH_CHECK_INTERVAL_S));
     }
 }
 
@@ -190,11 +189,11 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
             if (connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
                 std::cerr << "Could not connect to backend server on port " << servers[current_server].port << std::endl;
                 response = 
-                "HTTP/1.1 503 Service Unavailable\r\n"
-                "Content-Type: text/plain\r\n"
-                "Content-Length: 20\r\n"
-                "No Backend Available"
-                ;
+                    "HTTP/1.1 503 Service Unavailable\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Content-Length: 20\r\n"
+                    "No Backend Available"
+                    ;
             } else {
                 std::cout << "Connected to: " << std::endl << "IP: " << server_address.sin_family << std::endl << "Port: " << servers.at(current_server).port << std::endl;
                 
