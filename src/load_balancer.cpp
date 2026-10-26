@@ -147,8 +147,8 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
 
         int address_len = sizeof(this->address); // get address length
 
-        int client_socket = accept(this->load_balancer_fd,  (struct sockaddr*)&this->address, (socklen_t*)&address_len);
-        if (client_socket < 0) {
+        int client_fd = accept(this->load_balancer_fd,  (struct sockaddr*)&this->address, (socklen_t*)&address_len);
+        if (client_fd < 0) {
             if (errno == EINTR) {
                 continue;
             }
@@ -159,10 +159,10 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
 
         std::string full_client_buffer;
         char client_buffer[LARGE_BUFFER_SIZE] = {0};
-        ssize_t bytes_read = read(client_socket, client_buffer, LARGE_BUFFER_SIZE);
+        ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
 
         if (bytes_read <= 0) { // nothing read
-            close(client_socket);
+            close(client_fd);
             continue;
         }
 
@@ -171,7 +171,7 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
          */
         // while (bytes_read > 0) { 
         full_client_buffer.append(client_buffer, bytes_read);
-        // bytes_read = read(client_socket, client_buffer, LARGE_BUFFER_SIZE);
+        // bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
         // }
 
         int backend_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -224,8 +224,8 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
             close(backend_socket); // close backend socket
         }
 
-        write(client_socket, response.c_str(), response.size());
-        close(client_socket); // close client socket
+        write(client_fd, response.c_str(), response.size());
+        close(client_fd); // close client socket
         
         if (this->current_server < this->servers.size() - 1) {
             ++this->current_server;

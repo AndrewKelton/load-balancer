@@ -32,15 +32,15 @@ int main(int argc, char * argv[]) {
     std::string port_string = argv[1];
 
     // 1. Create Socket
-    int server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_socket < 0) {
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
         std::cerr << "Socket creation failed" << std::endl;
         return 1;
     }
 
     // set SO_REUSEADDR on the socket to true
     int optval = 1;
-    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
         std::cerr << "Error setting socket options" << std::endl;
         return 1;
     }
@@ -51,13 +51,13 @@ int main(int argc, char * argv[]) {
     address.sin_addr.s_addr = INADDR_ANY; // listen on all network interfaces
     address.sin_port = htons(port);
 
-    if (bind(server_socket, (struct sockaddr*)&address, sizeof(address)) < 0) {
+    if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
         std::cerr << "Error binding socket with IP and port" << std::endl;
         return 1;
     }
 
     // 3. Start listening for incoming connections
-    if (listen(server_socket, 0) < 0) {
+    if (listen(server_fd, 0) < 0) {
         std::cerr << "Error listening for incoming connections" << std::endl;
         return 1;
     }
@@ -67,7 +67,7 @@ int main(int argc, char * argv[]) {
     // 4. Accept a connection loop
     while (true) {
         int address_len = sizeof(address);
-        int client_socket = accept(server_socket, (struct sockaddr*)&address, (socklen_t*)&address_len);
+        int client_socket = accept(server_fd, (struct sockaddr*)&address, (socklen_t*)&address_len);
 
         if (client_socket < 0) {
             continue;
@@ -105,7 +105,7 @@ int main(int argc, char * argv[]) {
         close(client_socket); // close connection for this request
     }
 
-    close(server_socket); // close server socket
+    close(server_fd); // close server socket
 
     return 0;
 }
