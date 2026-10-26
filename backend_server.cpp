@@ -78,11 +78,15 @@ int main(int argc, char * argv[]) {
         read(client_socket, buffer, 1024);
         std::cout << "Received Request: " << std::endl << buffer << std::endl;
 
+        std::string response;
         request_t request = parse_request(buffer); // parse the request
+        if (request.method.empty()) {
+            response = "HTTP/1.1 400 Bad Request"; // request was malformed
+        } else {
+            response = get_response(request, port_string); // get the response
+        }
 
-        std::string http_response = get_response(request, port_string); // get the htpp response
-
-        write(client_socket, http_response.c_str(), http_response.length());
+        write(client_socket, response.c_str(), response.length());
         close(client_socket); // close connection for this request
     }
 
