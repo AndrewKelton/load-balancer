@@ -82,6 +82,7 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
     int bytes_sent = send(server_socket, load_balancer::health_endpoint, 1024, 0); 
     
     char buffer[1024] = {0};
+
     // receive response from backend
     int received_status = recv(server_socket, buffer, 22, 0);
 
@@ -89,6 +90,8 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
     if (buffer_view.find("200") == std::string_view::npos) {
        server.status.store(ServerHealthStatus::FAILED);
     }
+
+    close(server_socket); // close server socket
 }
 
 void load_balancer::LoadBalancer::health_checker() {
@@ -175,7 +178,12 @@ bool load_balancer::LoadBalancer::start_listen() {
             // connect to the backend
             if (connect(backend_socket, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
                 std::cerr << "Could not connect to backend server on port " << servers[current_server].port << std::endl;
-                response = "HTTP/1.1 503 Service Unavailable\r\n";
+                response = 
+                    "HTTP/1.1 503 Service Unavailable\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Content-Length: 20\r\n"
+                    "No Backend Available"
+                    ;
             } else {
                 std::cout << "Connected to: " << std::endl << "IP: " << server_address.sin_family << std::endl << "Port: " << servers.at(current_server).port << std::endl;
 
@@ -202,7 +210,11 @@ bool load_balancer::LoadBalancer::start_listen() {
         write(client_socket, response.c_str(), response.size());
         close(client_socket); // close client socket
         
-        ++this->current_server;
+        if (this->current_server < this->servers.size() - 1) {
+            ++this->current_server;
+        } else {
+            this->current_server = 0;
+        }
     }
 
     health_worker.join(); // stop the health check worker
