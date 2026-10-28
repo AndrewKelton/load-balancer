@@ -10,6 +10,9 @@
 #include <chrono>
 #include <atomic>
 #include <csignal>
+#include <cstdint>
+#include <mutex>
+#include <condition_variable>
 
 #define MAX_NUM_SERVERS 3
 #define MAX_FAILURE_COUNT 5
@@ -41,8 +44,10 @@ namespace load_balancer {
             std::vector<server_info_t> servers; // this might be better as a circular linked list
             int load_balancer_fd; // server_fd socket for load balancer
             sockaddr_in address; // address for load balancer
-            int current_server; // current server index for active server
+            std::atomic<int> current_server; // current server index for active server
             int port; // port to connect to ex. 8080
+            std::mutex delegator_mtx; // mutex for delegator worker
+            std::condition_variable delegator_cv; // control variable for delegator wakeups
 
             /* Creates address for a socket */
             sockaddr_in create_address(int port);
@@ -60,7 +65,11 @@ namespace load_balancer {
             * in the list of servers. If no healthy server is found in the list of 
             * servers, returns -1.
             */
-            bool get_next_healthy_server();
+            int8_t get_next_server(int8_t server_idx);
+
+            void server_delegator(int client_fd, int8_t curent_server_idx);
+
+            void server_delegator_worker(volatile std::sig_atomic_t& g_running, int thread_id);
 
         public:
 
