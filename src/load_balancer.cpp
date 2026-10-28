@@ -1,5 +1,6 @@
 #include "load_balancer.hpp"
 #include "utils.hpp"
+#include "thread_safe_queue.hpp"
 
 #include <cstring>
 
@@ -110,37 +111,12 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
 void load_balancer::LoadBalancer::health_checker(volatile std::sig_atomic_t& g_running) {
 
     while (g_running) {
-        for (int i = 0; i < this->servers.size(); ++i) {
+        for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
             send_health_check(this->servers.at(i));
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(HEALTH_CHECK_INTERVAL_S));
     }
-}
-
-bool load_balancer::LoadBalancer::get_next_healthy_server() {
-
-    int count = 0; 
-    int max_servers = this->servers.size();
-
-    while (count < max_servers) {
-        // std::cout << "current_server = " << this->current_server << std::endl;
-        if (this->servers.at(this->current_server).status.load() == ServerHealthStatus::FAILED || this->servers.at(this->current_server).status.load() == ServerHealthStatus::DEGRADED) {
-            ++count;
-            ++this->current_server;
-
-            if (this->current_server >= max_servers) {
-                this->current_server = 0;
-            }
-
-        } else {
-            return true; // active healthy server found
-        }
-    }
-
-    // no active server found
-    this->current_server = -1; 
-    return false;
 }
 
 int8_t load_balancer::LoadBalancer::get_next_server(int8_t server_idx) {
@@ -156,7 +132,7 @@ int8_t load_balancer::LoadBalancer::get_next_server(int8_t server_idx) {
     return -1;
 }
 
-void load_balancer::LoadBalancer::server_delegator(int client_fd) {
+void load_balancer::LoadBalancer::server_delegator(int client_fd, int8_t curent_server_idx) {
 
     std::string full_client_buffer;
     char client_buffer[LARGE_BUFFER_SIZE] = {0};
@@ -169,10 +145,10 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd) {
 
     full_client_buffer.append(client_buffer, bytes_read);
 
-    int backend_fd = socket(AF_INET, SOCK_STREAM, 1);
+    int backend_fd = socket(AF_INET, SOCK_STREAM, 0);
     std::string response;
 
-    int chosen_server_idx = get_next_server(this->current_server.load());
+    int chosen_server_idx = get_next_server(curent_server_idx);
 
     if (chosen_server_idx < 0) {
         // no servers are active
@@ -186,7 +162,7 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd) {
         
         // fallback, try to find a server that will connect with round robin
         int retries = 1;
-        while (retries < this->servers.size() && connection_status < 0) {
+        while (retries < MAX_NUM_SERVERS && connection_status < 0) {
             close(backend_fd);
             ++retries;
 
@@ -232,12 +208,30 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd) {
                     bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
                 }
             }
+
+            close(backend_fd); // close backend socket
         }
     }
-
-    close(backend_fd); // close backend socket
     write(client_fd, response.c_str(), response.size());
     close(client_fd); // close client socket
+}
+
+ThreadSafeQueue<int> queue; // thread-safe queue to hold client file descriptors
+
+void load_balancer::LoadBalancer::server_delegator_worker(volatile std::sig_atomic_t& g_running, int thread_id) {
+    while (true) {
+        {
+            std::unique_lock<std::mutex> lock(this->delegator_mtx);
+            this->delegator_cv.wait(lock, [this, &g_running]() { return !queue.empty() || !g_running; });
+        }
+
+        if (!g_running) {
+            break;
+        }
+
+        std::cout << "Thread id: " << thread_id << std::endl;
+        server_delegator(queue.pop(), this->current_server.load());
+    }
 }
 
 bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_running) {
@@ -254,6 +248,19 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
     std::thread health_worker([this, &g_running]() {
         this->health_checker(g_running);
     });
+
+    // create worker threads
+    static unsigned int num_threads = std::thread::hardware_concurrency() * 2;
+    std::vector<std::thread> server_delegator_workers;
+    server_delegator_workers.reserve(num_threads);
+
+    for (int8_t i = 0; i < num_threads; ++i) {
+        server_delegator_workers.emplace_back([this, &g_running, i]() {
+            server_delegator_worker(g_running, i); 
+        });
+    }
+
+    std::cout << num_threads << " server delegators are working." << std::endl << std::endl;;
     
     while (g_running) {
 
@@ -266,6 +273,7 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
             }
             continue;
         }
+        queue.push(client_fd);
 
         std::cout << "Received request from client" << std::endl;
 
@@ -273,17 +281,30 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
          * thread pool where workers are waiting to be woken up to work
          * with a client file descriptor.
          */
-        server_delegator(client_fd); 
+        {
+            std::unique_lock<std::mutex> lock(this->delegator_mtx);
+            this->delegator_cv.notify_one();
+        }
         
-        if (this->current_server < this->servers.size() - 1) {
-            ++this->current_server;
+        // move to next index of servers
+        if (this->current_server.load() < MAX_NUM_SERVERS - 1) {
+            this->current_server.fetch_add(1);
         } else {
-            this->current_server = 0;
+            this->current_server.store(0);
         }
     }
 
     health_worker.join(); // stop the health check worker
-    close(this->load_balancer_fd); // close socket
+
+    {
+        std::unique_lock<std::mutex> lock(this->delegator_mtx);
+        this->delegator_cv.notify_all(); // wake up all delegator threads
+    }
+    for (int8_t i = 0; i < num_threads; ++i) { // join all delegator threads
+        server_delegator_workers[i].join();
+    }
+
+    close(this->load_balancer_fd); // close load balancer socket
 
     std::cout << std::endl << "Load Balancer on port " << this->port << " has closed its connection." << std::endl;
 
