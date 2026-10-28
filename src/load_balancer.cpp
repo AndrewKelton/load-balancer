@@ -133,7 +133,7 @@ int8_t load_balancer::LoadBalancer::get_next_server(int8_t server_idx) {
     return -1;
 }
 
-void load_balancer::LoadBalancer::server_delegator(int client_fd, int8_t curent_server_idx) {
+void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, int8_t curent_server_idx) {
 
     std::string full_client_buffer;
     char client_buffer[LARGE_BUFFER_SIZE] = {0};
@@ -254,7 +254,7 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
         // use thread pool of workers
         int current_server_idx = this->current_server.load();
         pool.enqueue([this, client_fd, current_server_idx] {
-            server_delegator(client_fd, current_server_idx);
+            round_robin_server_delegator(client_fd, current_server_idx);
         });
         
         // move to next index of servers

@@ -63,7 +63,7 @@ namespace load_balancer {
             int8_t get_next_server(int8_t server_idx);
 
             /* Delegates the client's request to the appropriate server. */
-            void server_delegator(int client_fd, int8_t curent_server_idx);
+            void round_robin_server_delegator(int client_fd, int8_t curent_server_idx);
 
         public:
 
