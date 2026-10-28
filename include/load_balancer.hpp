@@ -77,6 +77,9 @@ namespace load_balancer {
             /* Returns index from servers vector with the least number of active connections */
             int get_server_index_with_least_connections(std::set<int> server_indexes_tried);
 
+            /* Sends request to backend and receives response and saves it to 'response'. */
+            void send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response);
+
         public:
 
             LoadBalancer(std::vector<int> backend_ports, int port = 8080) {

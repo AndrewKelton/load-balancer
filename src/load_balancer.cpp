@@ -133,6 +133,31 @@ int load_balancer::LoadBalancer::get_next_server(int server_idx) {
     return -1;
 }
 
+void load_balancer::LoadBalancer::send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response) {
+
+    // send message to backend
+    ssize_t bytes_sent = send(backend_fd, client_buffer.c_str(), client_buffer.size(), 0); 
+    
+    // receive response from backend
+    char server_buffer[LARGE_BUFFER_SIZE] = {0};
+    ssize_t bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
+
+    if (bytes_received < 0) {
+        std::cerr << "Error receiving data from backend" << std::endl;
+        response = "HTTP/1.1 502 Bad Gateway\r\n";
+    } else if (bytes_received == 0) {
+        std::cerr << "Remote connection has closed its connection!" << std::endl;
+        response = "HTTP/1.1 502 Bad Gateway\r\n";
+    } else {
+
+        // receive all bytes until backend closes its connection
+        while (bytes_received > 0) {
+            response.append(server_buffer, bytes_received);
+            bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
+        }
+    }
+}
+
 void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, int curent_server_idx) {
 
     std::string full_client_buffer;
@@ -191,27 +216,8 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
         } else {
             std::cout << "Connected to server on port: " << servers[chosen_server_idx].port << std::endl;
 
-            // send message to backend
-            ssize_t bytes_sent = send(backend_fd, full_client_buffer.c_str(), full_client_buffer.size(), 0); 
-            
-            // receive response from backend
-            char server_buffer[LARGE_BUFFER_SIZE] = {0};
-            ssize_t bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
-
-            if (bytes_received < 0) {
-                std::cerr << "Error receiving data from backend" << std::endl;
-                response = "HTTP/1.1 502 Bad Gateway\r\n";
-            } else if (bytes_received == 0) {
-                std::cerr << "Remote connection has closed its connection!" << std::endl;
-                response = "HTTP/1.1 502 Bad Gateway\r\n";
-            } else {
-
-                // receive all bytes until backend closes its connection
-                while (bytes_received > 0) {
-                    response.append(server_buffer, bytes_received);
-                    bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
-                }
-            }
+            // send request and receive response to/from backend
+            send_request_recv_response(backend_fd, full_client_buffer, response);
         }
 
         if (close_connection) {
@@ -305,29 +311,10 @@ void load_balancer::LoadBalancer::least_connections_server_delegator(int client_
             ;
         } else {
 
-            // servers[chosen_server_idx].active_connections.fetch_add(1, std::memory_order_relaxed);
-
             std::cout << "Connected to server on port: " << servers[chosen_server_idx].port << std::endl;
 
-            ssize_t bytes_sent = send(backend_fd, full_client_buffer.c_str(), full_client_buffer.size(), 0);
-
-            char server_buffer[LARGE_BUFFER_SIZE] = {0};
-            ssize_t bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
-
-            if (bytes_received < 0) {
-                std::cerr << "Error receiving data from backend" << std::endl;
-                response = "HTTP/1.1 502 Bad Gateway\r\n";
-            } else if (bytes_received == 0) {
-                std::cerr << "Remote connection has closed its connection!" << std::endl;
-                response = "HTTP/1.1 502 Bad Gateway\r\n";
-            } else {
-
-                // receive all bytes until backend closes its connection
-                while (bytes_received > 0) {
-                    response.append(server_buffer, bytes_received);
-                    bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
-                }
-            }
+            // send request and receive response to/from backend
+            send_request_recv_response(backend_fd, full_client_buffer, response); 
 
             servers[chosen_server_idx].active_connections.fetch_sub(1, std::memory_order_relaxed);
         }
