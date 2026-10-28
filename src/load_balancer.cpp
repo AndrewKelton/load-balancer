@@ -1,8 +1,9 @@
 #include "load_balancer.hpp"
 #include "utils.hpp"
-#include "thread_safe_queue.hpp"
+#include "thread_pool.hpp"
 
 #include <cstring>
+#include <thread>
 
 /* Next steps:
  * (1) Have workers that delegate the requests from the client so that we can accept multiple clients 
@@ -216,24 +217,6 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, int8_t curent_
     close(client_fd); // close client socket
 }
 
-ThreadSafeQueue<int> queue; // thread-safe queue to hold client file descriptors
-
-void load_balancer::LoadBalancer::server_delegator_worker(volatile std::sig_atomic_t& g_running, int thread_id) {
-    while (true) {
-        {
-            std::unique_lock<std::mutex> lock(this->delegator_mtx);
-            this->delegator_cv.wait(lock, [this, &g_running]() { return !queue.empty() || !g_running; });
-        }
-
-        if (!g_running) {
-            break;
-        }
-
-        std::cout << "Thread id: " << thread_id << std::endl;
-        server_delegator(queue.pop(), this->current_server.load());
-    }
-}
-
 bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_running) {
 
     // start listening for incoming connections
@@ -250,17 +233,9 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
     });
 
     // create worker threads
-    static unsigned int num_threads = std::thread::hardware_concurrency() * 2;
-    std::vector<std::thread> server_delegator_workers;
-    server_delegator_workers.reserve(num_threads);
+    ThreadPool pool;
 
-    for (int8_t i = 0; i < num_threads; ++i) {
-        server_delegator_workers.emplace_back([this, &g_running, i]() {
-            server_delegator_worker(g_running, i); 
-        });
-    }
-
-    std::cout << num_threads << " server delegators are working." << std::endl << std::endl;;
+    std::cout << pool.num_threads << " server delegators are working." << std::endl << std::endl;;
     
     while (g_running) {
 
@@ -273,18 +248,14 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
             }
             continue;
         }
-        queue.push(client_fd);
 
         std::cout << "Received request from client" << std::endl;
 
-        /* Instead of calling this function directly, need to make a
-         * thread pool where workers are waiting to be woken up to work
-         * with a client file descriptor.
-         */
-        {
-            std::unique_lock<std::mutex> lock(this->delegator_mtx);
-            this->delegator_cv.notify_one();
-        }
+        // use thread pool of workers
+        int current_server_idx = this->current_server.load();
+        pool.enqueue([this, client_fd, current_server_idx] {
+            server_delegator(client_fd, current_server_idx);
+        });
         
         // move to next index of servers
         if (this->current_server.load() < MAX_NUM_SERVERS - 1) {
@@ -295,15 +266,6 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
     }
 
     health_worker.join(); // stop the health check worker
-
-    {
-        std::unique_lock<std::mutex> lock(this->delegator_mtx);
-        this->delegator_cv.notify_all(); // wake up all delegator threads
-    }
-    for (int8_t i = 0; i < num_threads; ++i) { // join all delegator threads
-        server_delegator_workers[i].join();
-    }
-
     close(this->load_balancer_fd); // close load balancer socket
 
     std::cout << std::endl << "Load Balancer on port " << this->port << " has closed its connection." << std::endl;
