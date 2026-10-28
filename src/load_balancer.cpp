@@ -22,7 +22,7 @@
 
 bool load_balancer::LoadBalancer::setup_server(int port) {
     
-    this->load_balancer_fd = socket(AF_INET, SOCK_STREAM, 0);
+    load_balancer_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (load_balancer_fd < 0) {
         std::cerr << "Socket creation failed" << std::endl;
         return false;
@@ -30,7 +30,7 @@ bool load_balancer::LoadBalancer::setup_server(int port) {
 
     // set reuse address to true
     int optval = 1;
-    if (setsockopt(this->load_balancer_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+    if (setsockopt(load_balancer_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
         std::cerr << "Error setting reuse socket" << std::endl;
         return false;
     }
@@ -40,21 +40,21 @@ bool load_balancer::LoadBalancer::setup_server(int port) {
     timeout.tv_usec = 0;
 
     // set timeout for receiving data
-    if (setsockopt(this->load_balancer_fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+    if (setsockopt(load_balancer_fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
         std::cerr << "Error setting receive timeout" << std::endl;
         return false;
     }
 
     // set timeout for sending data
-    if (setsockopt(this->load_balancer_fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+    if (setsockopt(load_balancer_fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
         std::cerr << "Error setting send timeout" << std::endl;
         return false;
     }
     
-    this->address = create_address(port);
-    this->address.sin_addr.s_addr = INADDR_ANY;
+    address = create_address(port);
+    address.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(this->load_balancer_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
+    if (bind(load_balancer_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
         std::cerr << "Error binding socket with IP and port" << std::endl;
         return false;
     }
@@ -112,20 +112,20 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
 void load_balancer::LoadBalancer::health_checker(volatile std::sig_atomic_t& g_running) {
 
     while (g_running) {
-        for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
-            send_health_check(this->servers.at(i));
+        for (size_t i = 0; i < MAX_NUM_SERVERS; ++i) {
+            send_health_check(servers.at(i));
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(HEALTH_CHECK_INTERVAL_S));
     }
 }
 
-int8_t load_balancer::LoadBalancer::get_next_server(int8_t server_idx) {
+int load_balancer::LoadBalancer::get_next_server(int server_idx) {
 
-    for (int8_t i = 0; i < MAX_NUM_SERVERS; ++i) {
-        int8_t curr_idx = (server_idx + i) % MAX_NUM_SERVERS;
+    for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
+        int curr_idx = (server_idx + i) % MAX_NUM_SERVERS;
 
-        if (this->servers[curr_idx].status.load() == ServerHealthStatus::OK) {
+        if (servers[curr_idx].status.load() == ServerHealthStatus::OK) {
             return curr_idx;
         }
     }
@@ -133,7 +133,7 @@ int8_t load_balancer::LoadBalancer::get_next_server(int8_t server_idx) {
     return -1;
 }
 
-void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, int8_t curent_server_idx) {
+void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, int curent_server_idx) {
 
     std::string full_client_buffer;
     char client_buffer[LARGE_BUFFER_SIZE] = {0};
@@ -146,9 +146,7 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
 
     full_client_buffer.append(client_buffer, bytes_read);
 
-    int backend_fd = socket(AF_INET, SOCK_STREAM, 0);
     std::string response;
-
     int chosen_server_idx = get_next_server(curent_server_idx);
 
     if (chosen_server_idx < 0) {
@@ -156,12 +154,16 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
         std::cerr << "No servers available." << std::endl;
         response = "HTTP/1.1 503 Service Unavailable\r\n";
     } else {
+
+        int backend_fd = socket(AF_INET, SOCK_STREAM, 0);
+
         // some server is active
-        sockaddr_in server_address = create_address(this->servers[chosen_server_idx].port);
+        sockaddr_in server_address = create_address(servers[chosen_server_idx].port);
         
         int connection_status = connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address));
         
         // fallback, try to find a server that will connect with round robin
+        bool close_connection = true;
         int retries = 1;
         while (retries < MAX_NUM_SERVERS && connection_status < 0) {
             close(backend_fd);
@@ -169,11 +171,12 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
 
             chosen_server_idx = get_next_server(chosen_server_idx + 1);
             if (chosen_server_idx < 0) {
+                close_connection = false;
                 break; // no servers are active now
             }
 
             backend_fd = socket(AF_INET, SOCK_STREAM, 0);
-            server_address = create_address(this->servers[chosen_server_idx].port);
+            server_address = create_address(servers[chosen_server_idx].port);
             connection_status = connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address));
         }
 
@@ -186,7 +189,7 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
                 "No Backend Available"
             ;
         } else {
-            std::cout << "Connected to server on port: " << this->servers[chosen_server_idx].port << std::endl;
+            std::cout << "Connected to server on port: " << servers[chosen_server_idx].port << std::endl;
 
             // send message to backend
             ssize_t bytes_sent = send(backend_fd, full_client_buffer.c_str(), full_client_buffer.size(), 0); 
@@ -209,7 +212,9 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
                     bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
                 }
             }
+        }
 
+        if (close_connection) {
             close(backend_fd); // close backend socket
         }
     }
@@ -217,15 +222,135 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
     close(client_fd); // close client socket
 }
 
+int load_balancer::LoadBalancer::get_server_index_with_least_connections(std::set<int> server_indexes_tried) {
+    
+    int index = -1;
+    int least_connections = INT_MAX;
+
+    for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
+
+        if (server_indexes_tried.contains(i)) {
+            continue; // skip servers that have already tried connecting to
+        }
+
+        int current_load = servers[i].active_connections.load(std::memory_order_relaxed);
+        ServerHealthStatus status = servers[i].status.load(std::memory_order_relaxed);
+
+        if (current_load < least_connections && status == ServerHealthStatus::OK) {
+            least_connections = current_load;
+            index = i;
+        }
+    }
+
+    return index;
+}
+
+void load_balancer::LoadBalancer::least_connections_server_delegator(int client_fd) {
+
+    std::string full_client_buffer;
+    char client_buffer[LARGE_BUFFER_SIZE] = {0};
+    ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
+    
+    if (bytes_read <= 0) { // nothing read
+        close(client_fd);
+        return;
+    }
+
+    full_client_buffer.append(client_buffer, bytes_read); // need to change this to a loop later?
+
+    std::string response;
+    std::set<int> server_indexes_tried;
+
+    int chosen_server_idx = get_server_index_with_least_connections(server_indexes_tried);
+
+    if (chosen_server_idx < 0) { 
+        // no servers are active
+        std::cerr << "No servers available." << std::endl;
+        response = "HTTP/1.1 503 Service Unavailable\r\n";
+    } else {
+
+        servers[chosen_server_idx].active_connections.fetch_add(1, std::memory_order_relaxed);
+
+        int backend_fd = socket(AF_INET, SOCK_STREAM, 0);
+        
+        // some server is active and it has the least connections
+        sockaddr_in server_address = create_address(servers[chosen_server_idx].port);
+        int connection_status = connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address));
+        
+        bool close_connection = true;
+        while (server_indexes_tried.size() < MAX_NUM_SERVERS && connection_status < 0) {
+            servers[chosen_server_idx].active_connections.fetch_sub(1, std::memory_order_relaxed);
+            server_indexes_tried.insert(chosen_server_idx); // insert the chosen server to the set
+            close(backend_fd);
+            
+            chosen_server_idx = get_server_index_with_least_connections(server_indexes_tried);
+            if (chosen_server_idx < 0) {
+                close_connection = false;
+                break; // no servers are active now
+            }
+
+            servers[chosen_server_idx].active_connections.fetch_add(1, std::memory_order_relaxed);
+            backend_fd = socket(AF_INET, SOCK_STREAM, 0);
+            server_address = create_address(servers[chosen_server_idx].port);
+            connection_status = connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address));
+        }
+
+        if (connection_status < 0) {
+            std::cerr << "Could not connect to backend." << std::endl;
+            response = 
+                "HTTP/1.1 503 Service Unavailable\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 20\r\n"
+                "No Backend Available"
+            ;
+        } else {
+
+            // servers[chosen_server_idx].active_connections.fetch_add(1, std::memory_order_relaxed);
+
+            std::cout << "Connected to server on port: " << servers[chosen_server_idx].port << std::endl;
+
+            ssize_t bytes_sent = send(backend_fd, full_client_buffer.c_str(), full_client_buffer.size(), 0);
+
+            char server_buffer[LARGE_BUFFER_SIZE] = {0};
+            ssize_t bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
+
+            if (bytes_received < 0) {
+                std::cerr << "Error receiving data from backend" << std::endl;
+                response = "HTTP/1.1 502 Bad Gateway\r\n";
+            } else if (bytes_received == 0) {
+                std::cerr << "Remote connection has closed its connection!" << std::endl;
+                response = "HTTP/1.1 502 Bad Gateway\r\n";
+            } else {
+
+                // receive all bytes until backend closes its connection
+                while (bytes_received > 0) {
+                    response.append(server_buffer, bytes_received);
+                    bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
+                }
+            }
+
+            servers[chosen_server_idx].active_connections.fetch_sub(1, std::memory_order_relaxed);
+        }
+
+        if (close_connection) {
+            close(backend_fd); // close backend socket
+        }
+    }
+
+    write(client_fd, response.c_str(), response.size());
+    close(client_fd); // close client socket
+}
+
+
 bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_running) {
 
     // start listening for incoming connections
-    if (listen(this->load_balancer_fd, 3) < 0) {
+    if (listen(load_balancer_fd, BACKLOG_SIZE) < 0) {
         std::cerr << "Error listening for incoming connections" << std::endl;
         return false;
     }
 
-    std::cout << "Load Balancer listening on port " << this->port << std::endl;
+    std::cout << "Load Balancer listening on port " << port << std::endl;
 
     // create health check worker
     std::thread health_worker([this, &g_running]() {
@@ -239,9 +364,14 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
     
     while (g_running) {
 
-        int address_len = sizeof(this->address); // get address length
+        int address_len = sizeof(address); // get address length
 
-        int client_fd = accept(this->load_balancer_fd,  (struct sockaddr*)&this->address, (socklen_t*)&address_len);
+        for (const auto& server : servers) {
+            std::cout << "Server: " << server.port << " Active Connections: " << server.active_connections.load(std::memory_order_relaxed) << std::endl;
+        }
+
+
+        int client_fd = accept(load_balancer_fd,  (struct sockaddr*)&address, (socklen_t*)&address_len);
         if (client_fd < 0) {
             if (errno == EINTR) {
                 continue;
@@ -249,26 +379,30 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
             continue;
         }
 
-        std::cout << "Received request from client" << std::endl;
+        // std::cout << "Received request from client" << std::endl;
 
         // use thread pool of workers
-        int current_server_idx = this->current_server.load();
-        pool.enqueue([this, client_fd, current_server_idx] {
-            round_robin_server_delegator(client_fd, current_server_idx);
+        int current_server_idx = current_server.load();
+        pool.enqueue([this, client_fd] {
+            least_connections_server_delegator(client_fd);
         });
+
+        // pool.enqueue([this, client_fd, current_server_idx] {
+        //     round_robin_server_delegator(client_fd, current_server_idx);
+        // });
         
         // move to next index of servers
-        if (this->current_server.load() < MAX_NUM_SERVERS - 1) {
-            this->current_server.fetch_add(1);
-        } else {
-            this->current_server.store(0);
-        }
+        // if (current_server.load() < MAX_NUM_SERVERS - 1) {
+        //     current_server.fetch_add(1);
+        // } else {
+        //     current_server.store(0);
+        // }
     }
 
     health_worker.join(); // stop the health check worker
-    close(this->load_balancer_fd); // close load balancer socket
+    close(load_balancer_fd); // close load balancer socket
 
-    std::cout << std::endl << "Load Balancer on port " << this->port << " has closed its connection." << std::endl;
+    std::cout << std::endl << "Load Balancer on port " << port << " has closed its connection." << std::endl;
 
     return true;
 }
