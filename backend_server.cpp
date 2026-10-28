@@ -68,7 +68,7 @@ int main(int argc, char * argv[]) {
     }
 
     // 3. Start listening for incoming connections
-    if (listen(server_fd, 0) < 0) {
+    if (listen(server_fd, BACKLOG_SIZE) < 0) {
         std::cerr << "Error listening for incoming connections" << std::endl;
         return 1;
     }
@@ -97,10 +97,7 @@ int main(int argc, char * argv[]) {
         /* Have to do this differently for read(), need to read until blank
          * line "\r\n\r\n" is received. 
          */
-        // while (bytes_read > 0) {
         full_buffer.append(buffer, bytes_read);
-        //     bytes_read = read(client_fd, buffer, LARGE_BUFFER_SIZE);
-        // }
 
         std::cout << "Received Request: " << std::endl << buffer << std::endl;
 

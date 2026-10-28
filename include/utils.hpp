@@ -8,6 +8,7 @@
 
 #define SMALL_BUFFER_SIZE 128
 #define LARGE_BUFFER_SIZE 1024
+#define BACKLOG_SIZE 128
 
 struct request_t {
     std::string method;
