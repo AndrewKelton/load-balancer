@@ -170,7 +170,11 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
     if (chosen_server_idx < 0) {
         // no servers are active
         std::cerr << "No servers available." << std::endl;
-        response = "HTTP/1.1 503 Service Unavailable\r\n";
+        response = 
+            "HTTP/1.1 503 Service Unavailable\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 20\r\n\r\n"
+            "No Backend Available";
     } else {
 
         servers[chosen_server_idx].active_connections.fetch_add(1, std::memory_order_relaxed);
@@ -207,9 +211,8 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
             response = 
                 "HTTP/1.1 503 Service Unavailable\r\n"
                 "Content-Type: text/plain\r\n"
-                "Content-Length: 20\r\n"
-                "No Backend Available"
-            ;
+                "Content-Length: 20\r\n\r\n"
+                "No Backend Available";
         } else {
 
             // send request and receive response to/from backend
@@ -270,7 +273,11 @@ void load_balancer::LoadBalancer::least_connections_server_delegator(int client_
     if (chosen_server_idx < 0) { 
         // no servers are active
         std::cerr << "No servers available." << std::endl;
-        response = "HTTP/1.1 503 Service Unavailable\r\n";
+        response = 
+            "HTTP/1.1 503 Service Unavailable\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 20\r\n\r\n"
+            "No Backend Available";
     } else {
 
         servers[chosen_server_idx].active_connections.fetch_add(1, std::memory_order_relaxed);
@@ -304,7 +311,7 @@ void load_balancer::LoadBalancer::least_connections_server_delegator(int client_
             response = 
                 "HTTP/1.1 503 Service Unavailable\r\n"
                 "Content-Type: text/plain\r\n"
-                "Content-Length: 20\r\n"
+                "Content-Length: 20\r\n\r\n"
                 "No Backend Available"
             ;
         } else {
