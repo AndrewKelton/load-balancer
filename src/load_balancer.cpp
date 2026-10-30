@@ -112,6 +112,31 @@ void load_balancer::LoadBalancer::health_checker(volatile std::sig_atomic_t& g_r
     }
 }
 
+void load_balancer::LoadBalancer::send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response) {
+    
+    // send message to backend
+    ssize_t bytes_sent = send(backend_fd, client_buffer.c_str(), client_buffer.size(), 0); 
+    
+    // receive response from backend
+    char server_buffer[LARGE_BUFFER_SIZE] = {0};
+    ssize_t bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
+    
+    if (bytes_received < 0) {
+        std::cerr << "Error receiving data from backend" << std::endl;
+        response = "HTTP/1.1 502 Bad Gateway\r\n";
+    } else if (bytes_received == 0) {
+        std::cerr << "Remote connection has closed its connection!" << std::endl;
+        response = "HTTP/1.1 502 Bad Gateway\r\n";
+    } else {
+        
+        // receive all bytes until backend closes its connection
+        while (bytes_received > 0) {
+            response.append(server_buffer, bytes_received);
+            bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
+        }
+    }
+}
+
 int load_balancer::LoadBalancer::get_next_server_index_round_robin(int server_idx) {
 
     for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
@@ -123,31 +148,6 @@ int load_balancer::LoadBalancer::get_next_server_index_round_robin(int server_id
     }
 
     return -1;
-}
-
-void load_balancer::LoadBalancer::send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response) {
-
-    // send message to backend
-    ssize_t bytes_sent = send(backend_fd, client_buffer.c_str(), client_buffer.size(), 0); 
-    
-    // receive response from backend
-    char server_buffer[LARGE_BUFFER_SIZE] = {0};
-    ssize_t bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
-
-    if (bytes_received < 0) {
-        std::cerr << "Error receiving data from backend" << std::endl;
-        response = "HTTP/1.1 502 Bad Gateway\r\n";
-    } else if (bytes_received == 0) {
-        std::cerr << "Remote connection has closed its connection!" << std::endl;
-        response = "HTTP/1.1 502 Bad Gateway\r\n";
-    } else {
-
-        // receive all bytes until backend closes its connection
-        while (bytes_received > 0) {
-            response.append(server_buffer, bytes_received);
-            bytes_received = recv(backend_fd, server_buffer, LARGE_BUFFER_SIZE, 0);
-        }
-    }
 }
 
 void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, int curent_server_idx) {
@@ -346,7 +346,7 @@ void load_balancer::LoadBalancer::print_load_balancer_info() {
     std::cout << "Loading Method: " << load_method << "\n\n";
     if (load_method == "round-robin") {
         int next_server_idx = get_next_server_index_round_robin(current_server);
-        std::cout << "Next Server: " << (next_server_idx > 0 ? std::to_string(servers[next_server_idx].port) : "null") << "\n\n";
+        std::cout << "Next Server: " << (next_server_idx >= 0 ? std::to_string(servers[next_server_idx].port) : "null") << "\n\n";
     }
 
     std::cout << std::left
