@@ -7,18 +7,10 @@
 #include <iomanip>
 
 /* Next steps:
- * (1) Have workers that delegate the requests from the client so that we can accept multiple clients 
- * at the same time while ensuring thread and request safety.
- *  - create a thread safe queue
- *  - create thread safe backend selection
- *  - bounded queue? what happens when queue is full?
- *  - increase backlog
- *  - ensure that queue access and backend selection are thread-safe without locking the entire request lifecycle.
- * (3) Make a round robin function, kinda like get_next_healthy_server(), but return the server to use.
- * (4) Make a least connections function, different method of delegating work, this should test actual
- * concurrent connections and use atomics.
- *  - This requires keeping track of how many clients are connected to that server at once.
- *  - Need to make it non-blocking
+ * (2) Merge round_robin_server_delegator() and least_connections_server_delegator()
+ * into one function. The only real difference is rr takes client_fd and current server idx,
+ * while lc takes only client_fd. Also rr calls get_next_server(), while lc calls
+ * get_server_index_with_least_connections().
  */
 
 bool load_balancer::LoadBalancer::setup_server(int port) {
@@ -77,7 +69,6 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
     sockaddr_in address = create_address(server.port);
 
     if (connect(server_socket, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        // std::cerr << "Could not connect to server on port " << server.port << std::endl;
         
         if (server.failure_count < MAX_FAILURE_COUNT) {
             ++server.failure_count;
@@ -181,6 +172,8 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
         response = "HTTP/1.1 503 Service Unavailable\r\n";
     } else {
 
+        servers[chosen_server_idx].active_connections.fetch_add(1, std::memory_order_relaxed);
+
         int backend_fd = socket(AF_INET, SOCK_STREAM, 0);
 
         // some server is active
@@ -192,6 +185,7 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
         bool close_connection = true;
         int retries = 1;
         while (retries < MAX_NUM_SERVERS && connection_status < 0) {
+            servers[chosen_server_idx].active_connections.fetch_sub(1, std::memory_order_relaxed);
             close(backend_fd);
             ++retries;
 
@@ -201,6 +195,7 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
                 break; // no servers are active now
             }
 
+            servers[chosen_server_idx].active_connections.fetch_add(1, std::memory_order_relaxed);
             backend_fd = socket(AF_INET, SOCK_STREAM, 0);
             server_address = create_address(servers[chosen_server_idx].port);
             connection_status = connect(backend_fd, (struct sockaddr*)&server_address, sizeof(server_address));
@@ -218,6 +213,8 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
 
             // send request and receive response to/from backend
             send_request_recv_response(backend_fd, full_client_buffer, response);
+
+            servers[chosen_server_idx].active_connections.fetch_sub(1, std::memory_order_relaxed);
         }
 
         if (close_connection) {
@@ -326,7 +323,6 @@ void load_balancer::LoadBalancer::least_connections_server_delegator(int client_
     close(client_fd); // close client socket
 }
 
-
 std::string load_balancer::server_health_status_to_string(load_balancer::ServerHealthStatus status) {
     switch (status) {
         case load_balancer::ServerHealthStatus::OK:
@@ -350,7 +346,7 @@ void load_balancer::LoadBalancer::print_load_balancer_info() {
     std::cout << "Loading Method: " << load_method << "\n\n";
     if (load_method == "round-robin") {
         int next_server_idx = get_next_server(current_server);
-        std::cout << "Next Server: " << (next_server_idx > 0 ? std::to_string(servers[next_server_idx].port) : "null");
+        std::cout << "Next Server: " << (next_server_idx > 0 ? std::to_string(servers[next_server_idx].port) : "null") << "\n\n";
     }
 
     std::cout << std::left
