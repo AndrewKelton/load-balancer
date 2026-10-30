@@ -82,7 +82,6 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
 
     } else {
         server.failure_count = 0;
-        server.status.store(ServerHealthStatus::OK);
 
         // send health check
         int bytes_sent = send(server_socket, load_balancer::health_endpoint, strlen(load_balancer::health_endpoint) + 1, 0); 
@@ -95,6 +94,8 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
         std::string_view buffer_view = buffer;
         if (buffer_view.find("200") == std::string_view::npos) {
             server.status.store(ServerHealthStatus::FAILED);
+        } else {
+            server.status.store(ServerHealthStatus::OK); // ensures response was actually successful
         }
     }
 
