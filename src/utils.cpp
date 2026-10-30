@@ -1,6 +1,9 @@
 
 #include "utils.hpp"
+
 #include <string_view>
+#include <algorithm>
+#include <cctype>
 
 namespace {
     /* Strip leading + trailing white space and tabs
@@ -97,4 +100,10 @@ request_t parse_request(const std::string& buffer) {
     }
 
     return request;
+}
+
+void to_lower(std::string& str) {
+    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
 }
