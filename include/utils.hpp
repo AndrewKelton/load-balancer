@@ -29,4 +29,7 @@ request_t parse_request(const std::string& buffer);
 /* Parses a response from the buffer and returns a response_t structure */
 response_t parse_response(const std::string& buffer);
 
+void to_lower(std::string& upper);
+
+
 #endif
