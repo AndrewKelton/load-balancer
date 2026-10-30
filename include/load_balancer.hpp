@@ -100,22 +100,6 @@ namespace load_balancer {
 
         public:
 
-            LoadBalancer(std::vector<int> backend_ports, int port = 8080) {
-                
-                current_server = 0;
-                this->port = port;
-                servers = std::vector<server_info_t>(MAX_NUM_SERVERS);
-
-                for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
-                    servers[i].port = backend_ports[i];
-                }
-
-                if (!setup_server(port)) {
-                    std::cerr << "Error setting up server!" << std::endl;
-                    exit(1);
-                }
-            }
-
             LoadBalancer(std::vector<int> backend_ports, int port, std::string load_method) {
                 
                 current_server = 0;
