@@ -326,6 +326,74 @@ void load_balancer::LoadBalancer::least_connections_server_delegator(int client_
     close(client_fd); // close client socket
 }
 
+
+std::string load_balancer::server_health_status_to_string(load_balancer::ServerHealthStatus status) {
+    switch (status) {
+        case load_balancer::ServerHealthStatus::OK:
+            return "OK";
+        case load_balancer::ServerHealthStatus::DEGRADED:
+            return "DEGRADED";
+        case load_balancer::ServerHealthStatus::FAILED:
+            return "FAILED";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+void load_balancer::LoadBalancer::print_load_balancer_info() {
+
+    constexpr int PORT_WIDTH = 14;
+    constexpr int HEALTH_WIDTH = 14;
+    constexpr int CONNECTION_WIDTH = 22;
+
+    std::cout << "\n========== Load Balancer Info ==========\n";
+    std::cout << "Loading Method: " << load_method << "\n\n";
+    if (load_method == "round-robin") {
+        int next_server_idx = get_next_server(current_server);
+        std::cout << "Next Server: " << (next_server_idx > 0 ? std::to_string(servers[next_server_idx].port) : "null");
+    }
+
+    std::cout << std::left
+              << "+" << std::string(PORT_WIDTH, '-') 
+              << "+" << std::string(HEALTH_WIDTH, '-')
+              << "+" << std::string(CONNECTION_WIDTH, '-') << "+\n";
+
+    std::cout << "| " << std::setw(PORT_WIDTH - 1) << "Server Port"
+              << "| " << std::setw(HEALTH_WIDTH - 1) << "Health"
+              << "| " << std::setw(CONNECTION_WIDTH - 1) << "Active Connections"
+              << "|\n";
+
+    std::cout << "+" << std::string(PORT_WIDTH, '-')
+              << "+" << std::string(HEALTH_WIDTH, '-')
+              << "+" << std::string(CONNECTION_WIDTH, '-')
+              << "+\n";
+
+    for (const auto& server : servers) {
+        std::cout << "| " << std::setw(PORT_WIDTH - 1) << server.port
+                  << "| " << std::setw(HEALTH_WIDTH - 1)
+                  << server_health_status_to_string(server.status.load())
+                  << "| " << std::setw(CONNECTION_WIDTH - 1)
+                  << server.active_connections.load()
+                  << "|\n";
+    }
+
+    std::cout << "+"
+              << std::string(PORT_WIDTH, '-')
+              << "+"
+              << std::string(HEALTH_WIDTH , '-')
+              << "+"
+              << std::string(CONNECTION_WIDTH, '-')
+              << "+\n\n";
+}
+
+void load_balancer::LoadBalancer::print_load_balancer_info_worker(volatile std::sig_atomic_t& g_running) {
+
+    while (g_running) {
+        print_load_balancer_info();
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+}
+
 bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_running) {
 
     // start listening for incoming connections
@@ -338,7 +406,11 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
 
     // create health check worker
     std::thread health_worker([this, &g_running]() {
-        this->health_checker(g_running);
+        health_checker(g_running);
+    });
+
+    std::thread printer_worker([this, &g_running]() {
+        print_load_balancer_info_worker(g_running);
     });
     
     // create worker threads
@@ -377,8 +449,6 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
 
         int address_len = sizeof(address); // get address length
 
-        print_load_balancer_info();
-
         int client_fd = accept(load_balancer_fd,  (struct sockaddr*)&address, (socklen_t*)&address_len);
         if (client_fd < 0) {
             if (errno == EINTR) {
@@ -390,7 +460,8 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
         load_method_function(client_fd);
     }
 
-    health_worker.join(); // stop the health check worker
+    health_worker.join();    // stop the health check worker
+    printer_worker.join();   // stop the print info worker
     close(load_balancer_fd); // close load balancer socket
 
     std::cout << std::endl << "Load Balancer on port " << port << " has closed its connection." << std::endl;

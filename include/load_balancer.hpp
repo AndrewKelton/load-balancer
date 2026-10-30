@@ -26,6 +26,11 @@ namespace load_balancer {
         FAILED
     };
 
+    /* Returns a ServerHealthStatus as a std::string 
+     * OK => "OK", DEGRADED => "DEGRADED", FAILED => "FAILED"
+     */
+    std::string server_health_status_to_string(load_balancer::ServerHealthStatus status);
+
     // health endpoint
     inline constexpr const char * health_endpoint = "GET /health HTTP/1.1\r\n";
 
@@ -37,6 +42,7 @@ namespace load_balancer {
             "ServerHealthStatus atomic must be lock free");
         std::atomic<int> active_connections = 0;
     };
+
 
     class LoadBalancer {
         
@@ -83,7 +89,11 @@ namespace load_balancer {
             /* Sends request to backend and receives response and saves it to 'response'. */
             void send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response);
             
+            /* Prints the load balancer's info, like servers connected to, status, connections, etc.*/
             void print_load_balancer_info();
+
+            /* Print worker that prints the load balancer's info every second */
+            void print_load_balancer_info_worker(volatile std::sig_atomic_t& g_running);
 
         public:
 
