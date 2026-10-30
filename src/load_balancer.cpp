@@ -1,9 +1,10 @@
 #include "load_balancer.hpp"
-#include "utils.hpp"
 #include "thread_pool.hpp"
 
 #include <cstring>
 #include <thread>
+#include <functional>
+#include <iomanip>
 
 /* Next steps:
  * (1) Have workers that delegate the requests from the client so that we can accept multiple clients 
@@ -214,7 +215,6 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
                 "No Backend Available"
             ;
         } else {
-            std::cout << "Connected to server on port: " << servers[chosen_server_idx].port << std::endl;
 
             // send request and receive response to/from backend
             send_request_recv_response(backend_fd, full_client_buffer, response);
@@ -311,8 +311,6 @@ void load_balancer::LoadBalancer::least_connections_server_delegator(int client_
             ;
         } else {
 
-            std::cout << "Connected to server on port: " << servers[chosen_server_idx].port << std::endl;
-
             // send request and receive response to/from backend
             send_request_recv_response(backend_fd, full_client_buffer, response); 
 
@@ -328,7 +326,6 @@ void load_balancer::LoadBalancer::least_connections_server_delegator(int client_
     close(client_fd); // close client socket
 }
 
-
 bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_running) {
 
     // start listening for incoming connections
@@ -343,20 +340,44 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
     std::thread health_worker([this, &g_running]() {
         this->health_checker(g_running);
     });
-
+    
     // create worker threads
     ThreadPool pool;
 
+    // pick load balancing strategy once before accept runs
+    std::function<void(int)> load_method_function;
+    if (load_method == "round-robin") {
+        // round robin chosen
+        load_method_function = [this, &pool](int client_fd) {
+            int current_server_idx = current_server.load();
+
+            pool.enqueue([this, client_fd, current_server_idx]() {
+                round_robin_server_delegator(client_fd, current_server_idx);
+            });
+
+             if (current_server.load() < MAX_NUM_SERVERS - 1) {
+                current_server.fetch_add(1);
+            } else {
+                current_server.store(0);
+            }
+        };
+
+    } else {
+        // ignore all else, just default to least-connections
+        load_method_function = [this, &pool](int client_fd) {
+            pool.enqueue([this, client_fd]() {
+                least_connections_server_delegator(client_fd);
+            });
+        };
+    }
+    
     std::cout << pool.num_threads << " server delegators are working." << std::endl << std::endl;;
     
     while (g_running) {
 
         int address_len = sizeof(address); // get address length
 
-        for (const auto& server : servers) {
-            std::cout << "Server: " << server.port << " Active Connections: " << server.active_connections.load(std::memory_order_relaxed) << std::endl;
-        }
-
+        print_load_balancer_info();
 
         int client_fd = accept(load_balancer_fd,  (struct sockaddr*)&address, (socklen_t*)&address_len);
         if (client_fd < 0) {
@@ -366,24 +387,7 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
             continue;
         }
 
-        // std::cout << "Received request from client" << std::endl;
-
-        // use thread pool of workers
-        int current_server_idx = current_server.load();
-        pool.enqueue([this, client_fd] {
-            least_connections_server_delegator(client_fd);
-        });
-
-        // pool.enqueue([this, client_fd, current_server_idx] {
-        //     round_robin_server_delegator(client_fd, current_server_idx);
-        // });
-        
-        // move to next index of servers
-        // if (current_server.load() < MAX_NUM_SERVERS - 1) {
-        //     current_server.fetch_add(1);
-        // } else {
-        //     current_server.store(0);
-        // }
+        load_method_function(client_fd);
     }
 
     health_worker.join(); // stop the health check worker

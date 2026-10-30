@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <set>
 
+#include "utils.hpp"
+
 #define MAX_NUM_SERVERS 3
 #define MAX_FAILURE_COUNT 5
 #define HEALTH_CHECK_INTERVAL_S 2
@@ -45,6 +47,7 @@ namespace load_balancer {
             sockaddr_in address; // address for load balancer
             std::atomic<int> current_server; // current server index for active server
             int port; // port to connect to ex. 8080
+            std::string load_method = "least-connections";
 
             /* Creates address for a socket */
             sockaddr_in create_address(int port);
@@ -79,16 +82,38 @@ namespace load_balancer {
 
             /* Sends request to backend and receives response and saves it to 'response'. */
             void send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response);
+            
+            void print_load_balancer_info();
 
         public:
 
             LoadBalancer(std::vector<int> backend_ports, int port = 8080) {
-                this->current_server = 0;
+                
+                current_server = 0;
                 this->port = port;
-                this->servers = std::vector<server_info_t>(backend_ports.size());
+                servers = std::vector<server_info_t>(MAX_NUM_SERVERS);
 
-                for (int i = 0; i < backend_ports.size(); ++i) {
-                    this->servers[i].port = backend_ports[i];
+                for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
+                    servers[i].port = backend_ports[i];
+                }
+
+                if (!setup_server(port)) {
+                    std::cerr << "Error setting up server!" << std::endl;
+                    exit(1);
+                }
+            }
+
+            LoadBalancer(std::vector<int> backend_ports, int port, std::string load_method) {
+                
+                current_server = 0;
+                this->port = port;
+                servers = std::vector<server_info_t>(MAX_NUM_SERVERS);
+                
+                this->load_method = load_method;
+                to_lower(this->load_method);
+
+                for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
+                    servers[i].port = backend_ports[i];
                 }
 
                 if (!setup_server(port)) {
