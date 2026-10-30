@@ -56,6 +56,22 @@ int main(int argc, char * argv[]) {
         return 1;
     }
 
+    struct timeval timeout;
+    timeout.tv_sec = 3;
+    timeout.tv_usec = 0;
+
+    // set timeout for receiving data
+    if (setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+        std::cerr << "Error setting receive timeout" << std::endl;
+        return false;
+    }
+
+    // set timeout for sending data
+    if (setsockopt(server_fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
+        std::cerr << "Error setting send timeout" << std::endl;
+        return false;
+    }
+
     // 2. Bind the socket to local IP and port 900X
     sockaddr_in address = {};
     address.sin_family = AF_INET; // IPv4
