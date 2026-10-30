@@ -11,6 +11,7 @@
 #include <csignal>
 #include <cstdint>
 #include <set>
+#include <climits>
 
 #include "utils.hpp"
 
@@ -85,6 +86,8 @@ namespace load_balancer {
              * connections. Using the Least Connections scheduling method.
              */
             void least_connections_server_delegator(int client_fd);
+
+            // void server_delegator(int client_fd, int current_)
 
             /* Sends request to backend and receives response and saves it to 'response'. */
             void send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response);
