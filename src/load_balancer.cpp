@@ -9,7 +9,7 @@
 /* Next steps:
  * (2) Merge round_robin_server_delegator() and least_connections_server_delegator()
  * into one function. The only real difference is rr takes client_fd and current server idx,
- * while lc takes only client_fd. Also rr calls get_next_server(), while lc calls
+ * while lc takes only client_fd. Also rr calls get_next_server_index_round_robin(), while lc calls
  * get_server_index_with_least_connections().
  */
 
@@ -112,7 +112,7 @@ void load_balancer::LoadBalancer::health_checker(volatile std::sig_atomic_t& g_r
     }
 }
 
-int load_balancer::LoadBalancer::get_next_server(int server_idx) {
+int load_balancer::LoadBalancer::get_next_server_index_round_robin(int server_idx) {
 
     for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
         int curr_idx = (server_idx + i) % MAX_NUM_SERVERS;
@@ -164,7 +164,7 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
     full_client_buffer.append(client_buffer, bytes_read);
 
     std::string response;
-    int chosen_server_idx = get_next_server(curent_server_idx);
+    int chosen_server_idx = get_next_server_index_round_robin(curent_server_idx);
 
     if (chosen_server_idx < 0) {
         // no servers are active
@@ -189,7 +189,7 @@ void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, in
             close(backend_fd);
             ++retries;
 
-            chosen_server_idx = get_next_server(chosen_server_idx + 1);
+            chosen_server_idx = get_next_server_index_round_robin(chosen_server_idx + 1);
             if (chosen_server_idx < 0) {
                 close_connection = false;
                 break; // no servers are active now
@@ -345,7 +345,7 @@ void load_balancer::LoadBalancer::print_load_balancer_info() {
     std::cout << "\n========== Load Balancer Info ==========\n";
     std::cout << "Loading Method: " << load_method << "\n\n";
     if (load_method == "round-robin") {
-        int next_server_idx = get_next_server(current_server);
+        int next_server_idx = get_next_server_index_round_robin(current_server);
         std::cout << "Next Server: " << (next_server_idx > 0 ? std::to_string(servers[next_server_idx].port) : "null") << "\n\n";
     }
 

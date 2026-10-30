@@ -71,20 +71,20 @@ namespace load_balancer {
             * in the list of servers. If no healthy server is found in the list of 
             * servers, returns -1.
             */
-            int get_next_server(int server_idx);
+            int get_next_server_index_round_robin(int server_idx);
 
             /* Delegates the client's request to the appropriate server using
              * the Round Robin scheduling method. 
              */
             void round_robin_server_delegator(int client_fd, int curent_server_idx);
+            
+            /* Returns index from servers vector with the least number of active connections */
+            int get_server_index_with_least_connections(std::set<int> server_indexes_tried);
 
             /* Delegates the client's request to the server with the least active
              * connections. Using the Least Connections scheduling method.
              */
             void least_connections_server_delegator(int client_fd);
-
-            /* Returns index from servers vector with the least number of active connections */
-            int get_server_index_with_least_connections(std::set<int> server_indexes_tried);
 
             /* Sends request to backend and receives response and saves it to 'response'. */
             void send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response);
