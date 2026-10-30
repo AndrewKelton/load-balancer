@@ -1,5 +1,0 @@
-- Define Response type
-- Organize endpoints into Controller classes
-- Build hashmap based router
-- Create LoadBalancer Class
-- Create specific implementations of load balancing
