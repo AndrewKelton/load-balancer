@@ -19,11 +19,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Executable targets
 add_executable(load_balancer
     src/main.cpp
+    src/server.cpp
     src/load_balancer.cpp
     src/utils.cpp  
 )
 add_executable(backend
     src/backend_server.cpp
+    src/server.cpp
     src/utils.cpp
 )
 
