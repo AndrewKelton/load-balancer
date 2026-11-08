@@ -13,56 +13,6 @@
  * get_server_index_with_least_connections().
  */
 
-bool load_balancer::LoadBalancer::setup_server(int port) {
-    
-    load_balancer_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (load_balancer_fd < 0) {
-        std::cerr << "Socket creation failed" << std::endl;
-        return false;
-    }
-
-    // set reuse address to true
-    int optval = 1;
-    if (setsockopt(load_balancer_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
-        std::cerr << "Error setting reuse socket" << std::endl;
-        return false;
-    }
-
-    struct timeval timeout;
-    timeout.tv_sec = 3;
-    timeout.tv_usec = 0;
-
-    // set timeout for receiving data
-    if (setsockopt(load_balancer_fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
-        std::cerr << "Error setting receive timeout" << std::endl;
-        return false;
-    }
-
-    // set timeout for sending data
-    if (setsockopt(load_balancer_fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
-        std::cerr << "Error setting send timeout" << std::endl;
-        return false;
-    }
-    
-    address = create_address(port);
-    address.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(load_balancer_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        std::cerr << "Error binding socket with IP and port" << std::endl;
-        return false;
-    }
-    return true;
-}
-
-sockaddr_in load_balancer::LoadBalancer::create_address(int server_port) {
-
-    sockaddr_in address = {};
-    address.sin_family = AF_INET;
-    address.sin_port = htons(server_port);
-
-    return address;
-}
-
 void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
 
     int server_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -398,15 +348,10 @@ void load_balancer::LoadBalancer::print_load_balancer_info_worker(volatile std::
     }
 }
 
-bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_running) {
+bool load_balancer::LoadBalancer::start_load_balancer(volatile std::sig_atomic_t& g_running) {
 
     // start listening for incoming connections
-    if (listen(load_balancer_fd, BACKLOG_SIZE) < 0) {
-        std::cerr << "Error listening for incoming connections" << std::endl;
-        return false;
-    }
-
-    std::cout << "Load Balancer listening on port " << port << std::endl;
+    start_listen();
 
     // create health check worker
     std::thread health_worker([this, &g_running]() {
@@ -451,13 +396,8 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
     
     while (g_running) {
 
-        int address_len = sizeof(address); // get address length
-
-        int client_fd = accept(load_balancer_fd,  (struct sockaddr*)&address, (socklen_t*)&address_len);
-        if (client_fd < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
+        int client_fd = accept_connection();
+        if (client_fd == -2) {
             continue;
         }
 
@@ -466,9 +406,9 @@ bool load_balancer::LoadBalancer::start_listen(volatile std::sig_atomic_t& g_run
 
     health_worker.join();    // stop the health check worker
     printer_worker.join();   // stop the print info worker
-    close(load_balancer_fd); // close load balancer socket
+    close(get_server_fd()); // close load balancer socket
 
-    std::cout << std::endl << "Load Balancer on port " << port << " has closed its connection." << std::endl;
+    std::cout << std::endl << "Load Balancer on port " << get_port() << " has closed its connection." << std::endl;
 
     return true;
 }

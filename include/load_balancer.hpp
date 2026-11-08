@@ -14,6 +14,7 @@
 #include <climits>
 
 #include "utils.hpp"
+#include "server.hpp"
 
 #define MAX_NUM_SERVERS 3
 #define MAX_FAILURE_COUNT 5
@@ -44,20 +45,13 @@ namespace load_balancer {
         std::atomic<int> active_connections = 0;
     };
 
-
-    class LoadBalancer {
+    class LoadBalancer : public Server {
         
         private:
 
             std::vector<server_info_t> servers; // this might be better as a circular linked list
-            int load_balancer_fd; // server_fd socket for load balancer
-            sockaddr_in address; // address for load balancer
             std::atomic<int> current_server; // current server index for active server
-            int port; // port to connect to ex. 8080
             std::string load_method = "least-connections";
-
-            /* Creates address for a socket */
-            sockaddr_in create_address(int port);
 
             /* Connects to the server specified and sends a health check using 
             * the /health endpoint. If a server returns 200 OK, then that server
@@ -103,7 +97,7 @@ namespace load_balancer {
             LoadBalancer(std::vector<int> backend_ports, int port, std::string load_method) {
                 
                 current_server = 0;
-                this->port = port;
+                set_port(port);
                 servers = std::vector<server_info_t>(MAX_NUM_SERVERS);
                 
                 this->load_method = load_method;
@@ -113,19 +107,17 @@ namespace load_balancer {
                     servers[i].port = backend_ports[i];
                 }
 
-                if (!setup_server(port)) {
+                if (!setup_server()) {
                     std::cerr << "Error setting up server!" << std::endl;
                     exit(1);
                 }
             }
 
-            /* Creates server socket and server specifications. */
-            bool setup_server(int port = 8080);
-
             /* Starts listening for incoming connections and loops waiting for incoming
             * client connections. */
-            bool start_listen(volatile std::sig_atomic_t& g_running);
+            bool start_load_balancer(volatile std::sig_atomic_t& g_running);
     };
 };
+
 
 #endif

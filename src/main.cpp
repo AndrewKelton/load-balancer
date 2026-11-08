@@ -21,7 +21,8 @@ int main(int argc, char * argv[]) {
     std::vector<int> ports = {9001, 9002, 9003};
 
     load_balancer::LoadBalancer loadbalancer(ports, 8080, load_method);
-    loadbalancer.start_listen(g_running);
+    loadbalancer.start_listen();
+    loadbalancer.start_load_balancer(g_running);
 
     return 0;
 }
