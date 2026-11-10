@@ -22,28 +22,13 @@
 
 namespace load_balancer {
 
-    enum class ServerHealthStatus {
-        OK,
-        DEGRADED,
-        FAILED
-    };
-
     /* Returns a ServerHealthStatus as a std::string 
      * OK => "OK", DEGRADED => "DEGRADED", FAILED => "FAILED"
      */
-    std::string server_health_status_to_string(load_balancer::ServerHealthStatus status);
+    std::string server_health_status_to_string(ServerHealthStatus status);
 
     // health endpoint
     inline constexpr const char * health_endpoint = "GET /health HTTP/1.1\r\n";
-
-    struct server_info_t {
-        int port;
-        int failure_count = 0;
-        std::atomic<ServerHealthStatus> status = ServerHealthStatus::OK;
-        static_assert(std::atomic<ServerHealthStatus>::is_always_lock_free, 
-            "ServerHealthStatus atomic must be lock free");
-        std::atomic<int> active_connections = 0;
-    };
 
     class LoadBalancer : public Server {
         

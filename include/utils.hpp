@@ -23,6 +23,21 @@ struct response_t {
     std::unordered_map<std::string, std::string> headers;
 };
 
+enum class ServerHealthStatus {
+    OK,
+    DEGRADED,
+    FAILED
+};
+
+struct server_info_t {
+    int port;
+    int failure_count = 0;
+    std::atomic<ServerHealthStatus> status = ServerHealthStatus::OK;
+    static_assert(std::atomic<ServerHealthStatus>::is_always_lock_free, 
+        "ServerHealthStatus atomic must be lock free");
+    std::atomic<int> active_connections = 0;
+};
+
 /* Parses a request from the buffer and returns a request_t structure */
 request_t parse_request(const std::string& buffer);
 
