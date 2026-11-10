@@ -2,6 +2,7 @@
 #include "utils.hpp"
 
 #include <iostream>
+#include <unistd.h>
 
 bool Server::setup_server() {
 
@@ -95,4 +96,34 @@ sockaddr_in create_address(int port) {
     address.sin_port = htons(port);
 
     return address;
+}
+
+ssize_t Server::read_request(int client_fd, std::string& full_client_buffer) {
+    
+    char client_buffer[LARGE_BUFFER_SIZE] = {0};
+    ssize_t total_bytes_read = 0;
+    
+    
+    while (total_bytes_read < sizeof(client_buffer) - 1) {
+        ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
+
+        if (bytes_read < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break; // non-blocking mode, wait for more data epoll?
+            } else if (errno == EINTR) {
+                continue; // interrupted by signal
+            } else {
+                break; // real error, disconnection
+            }
+        } else if (bytes_read == 0) {
+            break; // connection closed
+        }
+
+        total_bytes_read += bytes_read;
+    }
+
+    client_buffer[total_bytes_read] = '\0';
+    full_client_buffer = client_buffer; // need to fix this later
+
+    return total_bytes_read;
 }

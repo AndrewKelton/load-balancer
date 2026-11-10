@@ -2,6 +2,7 @@
 #define SERVER_HPP
 
 #include <netinet/in.h>
+#include <string>
 
 class Server {
 
@@ -24,6 +25,8 @@ class Server {
         void set_port(int port);
 
         sockaddr_in get_address();
+
+        ssize_t read_request(int client_fd, std::string& full_client_buffer);
 
     private:
 
