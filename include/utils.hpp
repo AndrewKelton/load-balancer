@@ -32,7 +32,12 @@ enum class ServerHealthStatus {
 struct server_info_t {
     int port;
     int failure_count = 0;
-    std::atomic<ServerHealthStatus> status = ServerHealthStatus::OK;
+
+    /* Initially set to failed so no requests can "sneak in" right before
+     * the status is set to DEGRADED, if no servers are online when the
+     * load balancer is initially spun up.
+     */
+    std::atomic<ServerHealthStatus> status = ServerHealthStatus::FAILED; 
     static_assert(std::atomic<ServerHealthStatus>::is_always_lock_free, 
         "ServerHealthStatus atomic must be lock free");
     std::atomic<int> active_connections = 0;
