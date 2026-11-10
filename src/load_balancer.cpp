@@ -104,15 +104,10 @@ int load_balancer::LoadBalancer::get_next_server_index_round_robin(int server_id
 void load_balancer::LoadBalancer::round_robin_server_delegator(int client_fd, int curent_server_idx) {
 
     std::string full_client_buffer;
-    char client_buffer[LARGE_BUFFER_SIZE] = {0};
-    ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
-
-    if (bytes_read <= 0) { // nothing read
+    if (read_request(client_fd, full_client_buffer) <= 0) {
         close(client_fd);
         return;
     }
-
-    full_client_buffer.append(client_buffer, bytes_read);
 
     std::string response;
     int chosen_server_idx = get_next_server_index_round_robin(curent_server_idx);
@@ -205,15 +200,10 @@ int load_balancer::LoadBalancer::get_server_index_with_least_connections(std::se
 void load_balancer::LoadBalancer::least_connections_server_delegator(int client_fd) {
 
     std::string full_client_buffer;
-    char client_buffer[LARGE_BUFFER_SIZE] = {0};
-    ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
-    
-    if (bytes_read <= 0) { // nothing read
+    if (read_request(client_fd, full_client_buffer) <= 0) {
         close(client_fd);
         return;
     }
-
-    full_client_buffer.append(client_buffer, bytes_read); // need to change this to a loop later?
 
     std::string response;
     std::set<int> server_indexes_tried;
@@ -281,13 +271,13 @@ void load_balancer::LoadBalancer::least_connections_server_delegator(int client_
     close(client_fd); // close client socket
 }
 
-std::string load_balancer::server_health_status_to_string(load_balancer::ServerHealthStatus status) {
+std::string load_balancer::server_health_status_to_string(ServerHealthStatus status) {
     switch (status) {
-        case load_balancer::ServerHealthStatus::OK:
+        case ServerHealthStatus::OK:
             return "OK";
-        case load_balancer::ServerHealthStatus::DEGRADED:
+        case ServerHealthStatus::DEGRADED:
             return "DEGRADED";
-        case load_balancer::ServerHealthStatus::FAILED:
+        case ServerHealthStatus::FAILED:
             return "FAILED";
         default:
             return "UNKNOWN";

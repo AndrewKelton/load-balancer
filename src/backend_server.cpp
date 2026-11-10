@@ -58,17 +58,13 @@ int main(int argc, char * argv[]) {
         // Read incoming request data
         std::string full_buffer;
         char buffer[LARGE_BUFFER_SIZE] = {0};
-        ssize_t bytes_read = read(client_fd, buffer, LARGE_BUFFER_SIZE);
-
-        if (bytes_read <= 0) { // do nothing
+        if (server.read_request(client_fd, full_buffer) <= 0 ) {
             close(client_fd);
             continue;
         }
-
         /* Have to do this differently for read(), need to read until blank
          * line "\r\n\r\n" is received. 
          */
-        full_buffer.append(buffer, bytes_read);
 
         std::cout << "Received Request: " << std::endl << buffer << std::endl;
 
