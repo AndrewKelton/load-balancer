@@ -33,11 +33,11 @@ struct server_info_t {
     int port;
     int failure_count = 0;
 
-    /* Initially set to failed so no requests can "sneak in" right before
-     * the status is set to DEGRADED, if no servers are online when the
-     * load balancer is initially spun up.
+    /* Initially set to DEGRADED so no requests can "sneak in" right as
+     * the load balancer is initially spun up, and checking for x amount
+     * of healthy servers that do not exist.
      */
-    std::atomic<ServerHealthStatus> status = ServerHealthStatus::FAILED; 
+    std::atomic<ServerHealthStatus> status = ServerHealthStatus::DEGRADED; 
     static_assert(std::atomic<ServerHealthStatus>::is_always_lock_free, 
         "ServerHealthStatus atomic must be lock free");
     std::atomic<int> active_connections = 0;
