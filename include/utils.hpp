@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 #include <iostream>
+#include <atomic>
 
 #define SMALL_BUFFER_SIZE 128
 #define LARGE_BUFFER_SIZE 1024
