@@ -3,11 +3,17 @@
 
 #include "selection_strategy.hpp"
 
+#include <atomic>
+
 /* Round robin scheduling is currently bugged. It does not use the
  * previous index to go round-robin. Need to fix this
  */
 
 class RoundRobin : public SelectionStrategy {
+
+    private:
+
+        std::atomic<size_t> next_ = 0;
 
     public: 
 
