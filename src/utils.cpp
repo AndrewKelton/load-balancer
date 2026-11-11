@@ -4,6 +4,7 @@
 #include <string_view>
 #include <algorithm>
 #include <cctype>
+#include <arpa/inet.h>
 
 namespace {
     /* Strip leading + trailing white space and tabs
@@ -106,4 +107,12 @@ void to_lower(std::string& str) {
     std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
         return std::tolower(c);
     });
+}
+
+std::string convert_binary_ip_address_to_string(const sockaddr_in& address) {
+    
+    char ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &address.sin_addr, ip, sizeof(ip));
+    
+    return ip;
 }

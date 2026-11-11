@@ -6,6 +6,7 @@
 #include <vector>
 #include <iostream>
 #include <atomic>
+#include <netinet/in.h>
 
 #define SMALL_BUFFER_SIZE 128
 #define LARGE_BUFFER_SIZE 1024
@@ -50,7 +51,10 @@ request_t parse_request(const std::string& buffer);
 /* Parses a response from the buffer and returns a response_t structure */
 response_t parse_response(const std::string& buffer);
 
+/* Returns lowercase version of input string */
 void to_lower(std::string& upper);
 
+/* Returns the string of a binary ip address */
+std::string convert_binary_ip_address_to_string(const sockaddr_in& address);
 
 #endif
