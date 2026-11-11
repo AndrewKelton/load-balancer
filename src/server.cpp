@@ -108,17 +108,12 @@ ssize_t Server::read_request(int client_fd, std::string& full_client_buffer) {
     
     std::string tmp_buffer;
     ssize_t total_bytes_read = 0;
-
-    // std::cout << "Right here" << std::endl;
-
     /* This now works and waits for the entire request from the user. However,
      * adding some sort of a max bytes read may be necessary. For now this works.
      */
     while (tmp_buffer.find("\r\n\r\n") == std::string::npos) {
         char client_buffer[LARGE_BUFFER_SIZE] = {0};
         ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
-
-        std::cout << "Read " << bytes_read << " bytes." << std::endl;
 
         if (bytes_read < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
