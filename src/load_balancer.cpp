@@ -148,7 +148,7 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in cl
             ++retries;
 
             index = strategy->get_server_index(servers, tried_server_indexes);
-            if (index < 0) {
+            if (!index) {
                 close_connection = false;
                 break; // no servers are active now
             }
