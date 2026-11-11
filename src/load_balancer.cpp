@@ -255,32 +255,6 @@ bool load_balancer::LoadBalancer::start_load_balancer(volatile std::sig_atomic_t
         });
     };
 
-//     std::function<void(int)> load_method_function;
-//     if (load_method == "round-robin") {
-//         // round robin chosen
-//         load_method_function = [this, &pool](int client_fd) {
-//             int current_server_idx = current_server.load();
-// 
-//             pool.enqueue([this, client_fd, current_server_idx]() {
-//                 round_robin_server_delegator(client_fd, current_server_idx);
-//             });
-// 
-//              if (current_server.load() < MAX_NUM_SERVERS - 1) {
-//                 current_server.fetch_add(1);
-//             } else {
-//                 current_server.store(0);
-//             }
-//         };
-// 
-//     } else {
-//         // ignore all else, just default to least-connections
-//         load_method_function = [this, &pool](int client_fd) {
-//             pool.enqueue([this, client_fd]() {
-//                 least_connections_server_delegator(client_fd);
-//             });
-//         };
-//     }
-    
     std::cout << pool.num_threads << " server delegators are working." << std::endl << std::endl;;
     
     while (g_running) {
@@ -291,8 +265,6 @@ bool load_balancer::LoadBalancer::start_load_balancer(volatile std::sig_atomic_t
         }
 
         delegator(client_fd);
-
-        // load_method_function(client_fd);
     }
 
     health_worker.join();    // stop the health check worker
