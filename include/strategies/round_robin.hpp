@@ -13,6 +13,10 @@ class RoundRobin : public SelectionStrategy {
 
     private:
 
+        /* Similar offset to the LeastConnections class where we start
+         * from the next index that was previously chosen, except we
+         * just pick the healthy server that comes "next".
+         */
         std::atomic<size_t> next_ = 0;
 
     public: 

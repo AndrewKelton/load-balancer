@@ -3,7 +3,16 @@
 
 #include "selection_strategy.hpp"
 
+#include <atomic>
+
 class LeastConnections : public SelectionStrategy {
+
+    private:
+
+        /* Offset for servers list to make ties in servers with the "least
+         * connections" rotating.
+         */
+        std::atomic<size_t> offset_ = 0; 
 
     public:     
 
