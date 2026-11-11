@@ -7,6 +7,16 @@
 #include <shared_mutex>
 #include <memory>
 
+/* Next steps are to add the rate limiter to the Load Balancer.
+ * Will we start with the rate limiter attached to the load balancer
+ * as a simple proxy for the traffic. Eventually, putting the rate
+ * limiter at the application level may be useful when dealing with 
+ * different types of requests, but since right now we only handle 
+ * /health requests this will do and be a good way to check the 
+ * functionality of the rate limiter.
+ */
+
+
 /* Rate Limiter bucket, allows users application access if
  * they have a token available in their bucket. Tokens refill
  * at a rate of about 2 per second, allowing users essentially
