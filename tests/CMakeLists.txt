@@ -9,7 +9,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(unit_tests
     test_parse_request.cpp
-    # add more tests here
+    test_server_health_status_to_string.cpp
 )
 
 target_link_libraries(unit_tests
