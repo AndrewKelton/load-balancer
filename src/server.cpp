@@ -66,9 +66,10 @@ bool Server::start_listen() {
 
 int Server::accept_connection() {
     
-    int address_len = sizeof(address_);
+    sockaddr_in client_address{};
+    socklen_t client_len = sizeof(client_address);
 
-    int client_fd = accept(server_fd_, (struct sockaddr*)&address_, (socklen_t*)&address_len);
+    int client_fd = accept(server_fd_, (struct sockaddr*)&client_address, &client_len);
     if (client_fd < 0) {
         if (errno == EINTR) {
             return -2;
