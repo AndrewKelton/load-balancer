@@ -64,7 +64,7 @@ bool Server::start_listen() {
     return true;
 }
 
-int Server::accept_connection() {
+std::pair<int, sockaddr_in> Server::accept_connection() {
     
     sockaddr_in client_address{};
     socklen_t client_len = sizeof(client_address);
@@ -72,12 +72,12 @@ int Server::accept_connection() {
     int client_fd = accept(server_fd_, (struct sockaddr*)&client_address, &client_len);
     if (client_fd < 0) {
         if (errno == EINTR) {
-            return -2;
+            return {-2, client_address};
         }
-        return -2;
+        return {-2, client_address};
     }
 
-    return client_fd;
+    return {client_fd, client_address};
 }
 
 int Server::get_port() {

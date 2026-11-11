@@ -18,7 +18,10 @@ class Server {
 
         bool start_listen();
 
-        int accept_connection();
+        /* Accepts connection from the client, returns a pair populated
+         * with {client file descriptor, client address info}
+         */
+        std::pair<int, sockaddr_in> accept_connection();
 
         int get_port();
 
