@@ -20,6 +20,7 @@ add_library(lb_core
     src/server.cpp
     src/utils.cpp
     src/load_balancer.cpp
+    src/rate_limiter.cpp
     src/strategies/round_robin.cpp
     src/strategies/least_connections.cpp
 )
