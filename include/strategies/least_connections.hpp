@@ -8,12 +8,10 @@ class LeastConnections : public SelectionStrategy {
     public:     
 
         /* Returns the next server index from list of servers using the 
-         * Round Robin scheduling method. If no server is valid, then
+         * Least Connections scheduling method. If no server is valid, then
          * std::nullopt will be returned.
          */
-        [[nodiscard]] std::optional<size_t> get_server_index(std::vector<server_info_t>& servers) override {
-            return std::nullopt;
-        }
+        [[nodiscard]] std::optional<size_t> get_server_index(std::vector<server_info_t>& servers, const std::set<size_t>& tried) override;
 };
 
 #endif

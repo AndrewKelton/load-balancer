@@ -11,9 +11,7 @@ class RoundRobin : public SelectionStrategy {
          * Round Robin scheduling method. If no server is valid, then
          * std::nullopt will be returned.
          */
-        [[nodiscard]] std::optional<size_t> get_server_index(std::vector<server_info_t>& servers) override {
-            return std::nullopt;
-        }
+        [[nodiscard]] std::optional<size_t> get_server_index(std::vector<server_info_t>& servers, const std::set<size_t>& tried) override;
 };
 
 #endif

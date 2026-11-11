@@ -5,6 +5,10 @@
 #define SELECTION_STRATEGY_HPP
 
 #include <vector>
+#include <optional>
+#include <cstddef>
+#include <set>
+
 #include "utils.hpp"
 
 class SelectionStrategy {
@@ -15,7 +19,7 @@ class SelectionStrategy {
          * scheduling method implements it. If no server is available,
          * then returns std::nullopt
          */
-        virtual std::optional<size_t> get_server_index(std::vector<server_info_t>& servers) = 0;
+        virtual std::optional<size_t> get_server_index(std::vector<server_info_t>& servers, const std::set<size_t>& tried) = 0;
 
         // destructor
         virtual ~SelectionStrategy() = default;
