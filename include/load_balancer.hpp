@@ -11,10 +11,12 @@
 #include <csignal>
 #include <cstdint>
 #include <set>
-#include <climits>
+#include <memory>
 
 #include "utils.hpp"
 #include "server.hpp"
+#include "strategies/round_robin.hpp"
+#include "strategies/least_connections.hpp"
 
 #define MAX_NUM_SERVERS 3
 #define MAX_FAILURE_COUNT 5
@@ -28,7 +30,7 @@ namespace load_balancer {
     std::string server_health_status_to_string(ServerHealthStatus status);
 
     // health endpoint
-    inline constexpr const char * health_endpoint = "GET /health HTTP/1.1\r\n";
+    inline constexpr const char * health_endpoint = "GET /health HTTP/1.1\r\n\r\n";
 
     class LoadBalancer : public Server {
         
@@ -37,6 +39,8 @@ namespace load_balancer {
             std::vector<server_info_t> servers; // this might be better as a circular linked list
             std::atomic<int> current_server; // current server index for active server
             std::string load_method = "least-connections";
+
+            std::unique_ptr<SelectionStrategy> strategy;
 
             /* Connects to the server specified and sends a health check using 
             * the /health endpoint. If a server returns 200 OK, then that server
@@ -68,6 +72,11 @@ namespace load_balancer {
 
             // void server_delegator(int client_fd, int current_)
 
+            /* Delegates the client's request to the server using the scheduling strategy
+             * pointed to by LoadBalancer::strategy
+             */
+            void server_delegator(int client_fd);
+
             /* Sends request to backend and receives response and saves it to 'response'. */
             void send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response);
             
@@ -80,13 +89,19 @@ namespace load_balancer {
         public:
 
             LoadBalancer(std::vector<int> backend_ports, int port, std::string load_method) {
-                
+
                 current_server = 0;
                 set_port(port);
                 servers = std::vector<server_info_t>(MAX_NUM_SERVERS);
                 
                 this->load_method = load_method;
                 to_lower(this->load_method);
+
+                if (this->load_method == "round-robin") {
+                    strategy = std::make_unique<RoundRobin>();
+                } else {
+                    strategy = std::make_unique<LeastConnections>(); // least connections by default
+                }
 
                 for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
                     servers[i].port = backend_ports[i];

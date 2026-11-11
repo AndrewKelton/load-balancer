@@ -271,6 +271,83 @@ void load_balancer::LoadBalancer::least_connections_server_delegator(int client_
     close(client_fd); // close client socket
 }
 
+void load_balancer::LoadBalancer::server_delegator(int client_fd) {
+
+    std::string client_buffer;
+    if (read_request(client_fd, client_buffer) <= 0) {
+        close(client_fd);
+        return; // maybe setup in future for a retry?
+    }
+
+    std::string response;
+    std::set<size_t> tried_server_indexes; // holds the indexes of servers tried to connect to
+    std::optional<size_t> index = strategy->get_server_index(servers, tried_server_indexes);
+    
+    if (!index) {
+        std::cerr << "No servers available." << std::endl;
+        response = 
+            "HTTP/1.1 503 Service Unavailable\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 20\r\n\r\n"
+            "No Backend Available";
+    } else {
+
+        tried_server_indexes.insert(*index); // insert tried server
+
+        servers[*index].active_connections.fetch_add(1, std::memory_order_relaxed);
+
+        int backend_fd = setup_socket();
+        // some server is active
+        sockaddr_in backend_address = create_address(servers[*index].port);
+
+        int connection_status = connect(backend_fd, (struct sockaddr*)&backend_address, sizeof(backend_address));
+
+        // fallback, try to find a server that will connect
+        bool close_connection = true;
+        int retries = 1;
+        while (retries < servers.size() && connection_status < 0) {
+            servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
+            close(backend_fd);
+            ++retries;
+
+            // size_t next_index = static_cast<size_t>(static_cast<std::ptrdiff_t>(*index) + 1);
+
+            index = strategy->get_server_index(servers, tried_server_indexes);
+            if (index < 0) {
+                close_connection = false;
+                break; // no servers are active now
+            }
+            tried_server_indexes.insert(*index);
+
+            servers[*index].active_connections.fetch_add(1, std::memory_order_relaxed);
+            backend_fd = setup_socket();
+            backend_address = create_address(servers[*index].port);
+            connection_status = connect(backend_fd, (struct sockaddr*)&backend_address, sizeof(backend_address));
+        }
+
+        if (connection_status < 0) {
+            std::cerr << "Could not connect to backend" << std::endl;
+            response = 
+                "HTTP/1.1 503 Service Unavailable\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 20\r\n\r\n"
+                "No Backend Available";
+        } else {
+
+            // send request and receive response to/from backend
+            send_request_recv_response(backend_fd, client_buffer, response);
+            servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
+        }
+
+        if (close_connection) {
+            close(backend_fd);
+        }
+
+        write(client_fd, response.c_str(), response.size());
+        close(client_fd);
+    }
+}
+
 std::string load_balancer::server_health_status_to_string(ServerHealthStatus status) {
     switch (status) {
         case ServerHealthStatus::OK:
@@ -356,31 +433,38 @@ bool load_balancer::LoadBalancer::start_load_balancer(volatile std::sig_atomic_t
     ThreadPool pool;
 
     // pick load balancing strategy once before accept runs
-    std::function<void(int)> load_method_function;
-    if (load_method == "round-robin") {
-        // round robin chosen
-        load_method_function = [this, &pool](int client_fd) {
-            int current_server_idx = current_server.load();
+    std::function<void(int)> delegator;
+    delegator = [this, &pool](int client_fd) {
+        pool.enqueue([this, client_fd]() {
+            server_delegator(client_fd);
+        });
+    };
 
-            pool.enqueue([this, client_fd, current_server_idx]() {
-                round_robin_server_delegator(client_fd, current_server_idx);
-            });
-
-             if (current_server.load() < MAX_NUM_SERVERS - 1) {
-                current_server.fetch_add(1);
-            } else {
-                current_server.store(0);
-            }
-        };
-
-    } else {
-        // ignore all else, just default to least-connections
-        load_method_function = [this, &pool](int client_fd) {
-            pool.enqueue([this, client_fd]() {
-                least_connections_server_delegator(client_fd);
-            });
-        };
-    }
+//     std::function<void(int)> load_method_function;
+//     if (load_method == "round-robin") {
+//         // round robin chosen
+//         load_method_function = [this, &pool](int client_fd) {
+//             int current_server_idx = current_server.load();
+// 
+//             pool.enqueue([this, client_fd, current_server_idx]() {
+//                 round_robin_server_delegator(client_fd, current_server_idx);
+//             });
+// 
+//              if (current_server.load() < MAX_NUM_SERVERS - 1) {
+//                 current_server.fetch_add(1);
+//             } else {
+//                 current_server.store(0);
+//             }
+//         };
+// 
+//     } else {
+//         // ignore all else, just default to least-connections
+//         load_method_function = [this, &pool](int client_fd) {
+//             pool.enqueue([this, client_fd]() {
+//                 least_connections_server_delegator(client_fd);
+//             });
+//         };
+//     }
     
     std::cout << pool.num_threads << " server delegators are working." << std::endl << std::endl;;
     
@@ -391,7 +475,9 @@ bool load_balancer::LoadBalancer::start_load_balancer(volatile std::sig_atomic_t
             continue;
         }
 
-        load_method_function(client_fd);
+        delegator(client_fd);
+
+        // load_method_function(client_fd);
     }
 
     health_worker.join();    // stop the health check worker
