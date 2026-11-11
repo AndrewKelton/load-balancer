@@ -20,6 +20,8 @@ add_library(lb_core
     src/server.cpp
     src/utils.cpp
     src/load_balancer.cpp
+    src/strategies/round_robin.cpp
+    src/strategies/least_connections.cpp
 )
 target_include_directories(lb_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
