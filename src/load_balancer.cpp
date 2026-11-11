@@ -186,10 +186,6 @@ void load_balancer::LoadBalancer::print_load_balancer_info() {
 
     std::cout << "\n========== Load Balancer Info ==========\n";
     std::cout << "Loading Method: " << load_method << "\n\n";
-    if (load_method == "round-robin") {
-        int next_server_idx = get_next_server_index_round_robin(current_server);
-        std::cout << "Next Server: " << (next_server_idx >= 0 ? std::to_string(servers[next_server_idx].port) : "null") << "\n\n";
-    }
 
     std::cout << std::left
               << "+" << std::string(PORT_WIDTH, '-') 
