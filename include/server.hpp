@@ -12,6 +12,8 @@ class Server {
 
         Server(int port) : port_(port) {};
 
+        int setup_socket();
+
         bool setup_server();
 
         bool start_listen();
