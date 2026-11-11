@@ -2,21 +2,18 @@
 #define LOAD_BALANCER_HPP
 
 #include <iostream>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
 #include <vector>
 #include <chrono>
 #include <atomic>
-#include <csignal>
-#include <cstdint>
 #include <set>
 #include <memory>
+#include <csignal>
 
 #include "utils.hpp"
 #include "server.hpp"
 #include "strategies/round_robin.hpp"
 #include "strategies/least_connections.hpp"
+#include "rate_limiter.hpp"
 
 #define MAX_NUM_SERVERS 3
 #define MAX_FAILURE_COUNT 5
@@ -41,6 +38,7 @@ namespace load_balancer {
             std::string load_method = "least-connections";
 
             std::unique_ptr<SelectionStrategy> strategy;
+            RateLimiter rate_limiter_;
 
             /* Connects to the server specified and sends a health check using 
             * the /health endpoint. If a server returns 200 OK, then that server
@@ -54,7 +52,7 @@ namespace load_balancer {
             /* Delegates the client's request to the server using the scheduling strategy
              * pointed to by LoadBalancer::strategy
              */
-            void server_delegator(int client_fd);
+            void server_delegator(int client_fd, sockaddr_in client_address);
 
             /* Sends request to backend and receives response and saves it to 'response'. */
             void send_request_recv_response(int backend_fd, std::string client_buffer, std::string& response);

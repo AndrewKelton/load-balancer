@@ -5,6 +5,11 @@
 #include <thread>
 #include <functional>
 #include <iomanip>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <csignal>
+#include <cstdint>
 
 /* Next steps:
  * (2) Merge round_robin_server_delegator() and least_connections_server_delegator()
@@ -88,7 +93,21 @@ void load_balancer::LoadBalancer::send_request_recv_response(int backend_fd, std
     }
 }
 
-void load_balancer::LoadBalancer::server_delegator(int client_fd) {
+void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in client_address) {
+
+    // check if request is allowed first
+    if (!rate_limiter_.allow_request(convert_binary_ip_address_to_string(client_address))) {
+        std::string response = 
+            "HTTP/1.1 429 Too Many Requests\r\n"
+            "Content-Type: text/plain\r\n"
+            "Retry After: 60\r\n\r\n"; // change this to the actual retry after
+
+        // request is not allowed, so tell client first 
+        write(client_fd, response.c_str(), response.size());
+        close(client_fd);
+
+        return;
+    }
 
     std::string client_buffer;
     if (read_request(client_fd, client_buffer) <= 0) {
@@ -127,8 +146,6 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd) {
             servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
             close(backend_fd);
             ++retries;
-
-            // size_t next_index = static_cast<size_t>(static_cast<std::ptrdiff_t>(*index) + 1);
 
             index = strategy->get_server_index(servers, tried_server_indexes);
             if (index < 0) {
@@ -248,10 +265,10 @@ bool load_balancer::LoadBalancer::start_load_balancer(volatile std::sig_atomic_t
     ThreadPool pool;
 
     // pick load balancing strategy once before accept runs
-    std::function<void(int)> delegator;
-    delegator = [this, &pool](int client_fd) {
-        pool.enqueue([this, client_fd]() {
-            server_delegator(client_fd);
+    std::function<void(int, sockaddr_in)> delegator;
+    delegator = [this, &pool](int client_fd, sockaddr_in client_address) {
+        pool.enqueue([this, client_fd, client_address]() {
+            server_delegator(client_fd, client_address);
         });
     };
 
@@ -259,12 +276,12 @@ bool load_balancer::LoadBalancer::start_load_balancer(volatile std::sig_atomic_t
     
     while (g_running) {
 
-        int client_fd = accept_connection();
+        auto [client_fd, client_address] = accept_connection();
         if (client_fd == -2) {
             continue;
         }
 
-        delegator(client_fd);
+        delegator(client_fd, client_address);
     }
 
     health_worker.join();    // stop the health check worker
