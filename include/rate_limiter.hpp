@@ -3,6 +3,9 @@
 
 #include <chrono>
 #include <atomic>
+#include <unordered_map>
+#include <shared_mutex>
+#include <memory>
 
 /* Rate Limiter bucket, allows users application access if
  * they have a token available in their bucket. Tokens refill
@@ -13,22 +16,17 @@
 class TokenBucket {
 
     private:
-        double rate;
-        int capacity;
         std::atomic<int> tokens;
         std::__1::chrono::system_clock::time_point last_refill; // time the bucket was last refilled
 
-
     public:
 
-        TokenBucket(double rate, int capacity) {
-            this->rate = rate;
-            this->capacity = capacity;
-            tokens.store(this->capacity);
+        TokenBucket(int capacity) {
+            tokens.store(capacity);
             last_refill = std::chrono::system_clock::now();
         }
 
-        bool allow_request();
+        bool allow_request(double rate, int capacity);
 
         bool try_consume_token();
 };
@@ -37,13 +35,18 @@ class RateLimiter {
 
     private:
         
-        TokenBucket bucket;
+        std::unordered_map<std::string, std::shared_ptr<TokenBucket>> ip_store;
+        std::shared_mutex store_mtx;
+        double rate_;
+        int capacity_;
 
         // do rate limiter stuff here
 
     public:
 
-        // do rate limiter stuff here
+        RateLimiter(double rate, int capacity) : rate_(rate), capacity_(capacity) {}
+
+        bool allow_request(const std::string& ip_address);
 };
 
 #endif

@@ -1,6 +1,6 @@
 #include "rate_limiter.hpp"
 
-bool TokenBucket::allow_request() {
+bool TokenBucket::allow_request(double rate, int capacity) {
     auto now = std::chrono::system_clock::now();
 
     /* calculate how much time has passed since last refill and 
@@ -33,4 +33,35 @@ bool TokenBucket::try_consume_token() {
     }
 
     return false; // no tokens available
+}
+
+bool RateLimiter::allow_request(const std::string& ip_address) {
+
+    std::shared_ptr<TokenBucket> bucket = nullptr;
+
+    { // read bucket from ip store
+        std::shared_lock<std::shared_mutex> read_lock(store_mtx);
+        auto it = ip_store.find(ip_address);
+        
+        if (it != ip_store.end()) {
+            bucket = it->second;
+        }
+    }
+
+    // if ip is not in store, add it to store
+    if (!bucket) {
+        std::shared_lock<std::shared_mutex> write_lock(store_mtx);
+
+        // double check to make sure no other thread added to store
+        auto it = ip_store.find(ip_address);
+
+        if (it == ip_store.end()) {
+            bucket = std::make_shared<TokenBucket>(capacity_);
+            ip_store[ip_address] = bucket;
+        } else {
+            bucket = it->second;
+        }
+    }
+    
+    return bucket->allow_request(rate_, capacity_); // check if bucket has token
 }
