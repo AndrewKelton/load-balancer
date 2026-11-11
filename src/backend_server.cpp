@@ -50,7 +50,7 @@ int main(int argc, char * argv[]) {
     // 4. Accept a connection loop
     while (g_running) {
         
-        int client_fd = server.accept_connection();
+        auto [client_fd, client_address] = server.accept_connection();
         if (client_fd < 0) {
             continue;
         }
