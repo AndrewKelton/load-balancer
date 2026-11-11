@@ -106,40 +106,37 @@ sockaddr_in create_address(int port) {
 
 ssize_t Server::read_request(int client_fd, std::string& full_client_buffer) {
     
-    char client_buffer[LARGE_BUFFER_SIZE] = {0};
+    std::string tmp_buffer;
     ssize_t total_bytes_read = 0;
-    ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
 
-    total_bytes_read += bytes_read;
-    
-    /* This is buggy, it loops forever and cannt break the loop, it waits
-     * for the client to close the connection. Need to fix this!!!
+    // std::cout << "Right here" << std::endl;
+
+    /* This now works and waits for the entire request from the user. However,
+     * adding some sort of a max bytes read may be necessary. For now this works.
      */
-//     while (total_bytes_read < sizeof(client_buffer) - 1) {
-//         ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
-// 
-//         std::string tmp_buffer = client_buffer;
-//         if (tmp_buffer.contains("\r\n\r\n")) {
-//             break;
-//         }
-// 
-//         if (bytes_read < 0) {
-//             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-//                 break; // non-blocking mode, wait for more data epoll?
-//             } else if (errno == EINTR) {
-//                 continue; // interrupted by signal
-//             } else {
-//                 break; // real error, disconnection
-//             }
-//         } else if (bytes_read == 0) {
-//             break; // connection closed
-//         }
-// 
-//         total_bytes_read += bytes_read;
-//     }
+    while (tmp_buffer.find("\r\n\r\n") == std::string::npos) {
+        char client_buffer[LARGE_BUFFER_SIZE] = {0};
+        ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
 
-    client_buffer[total_bytes_read] = '\0';
-    full_client_buffer = client_buffer; // need to fix this later
+        std::cout << "Read " << bytes_read << " bytes." << std::endl;
+
+        if (bytes_read < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break; // non-blocking mode, wait for more data epoll?
+            } else if (errno == EINTR) {
+                continue; // interrupted by signal
+            } else {
+                break; // real error, disconnection
+            }
+        } else if (bytes_read == 0) {
+            break; // connection closed
+        }
+
+        tmp_buffer.append(client_buffer, bytes_read);
+        total_bytes_read += bytes_read;
+    }
+
+    full_client_buffer = tmp_buffer; // need to fix this later
 
     return total_bytes_read;
 }
