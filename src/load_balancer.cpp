@@ -112,6 +112,7 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd) {
         tried_server_indexes.insert(*index); // insert tried server
 
         servers[*index].active_connections.fetch_add(1, std::memory_order_relaxed);
+        current_server.store(*index);
 
         int backend_fd = setup_socket();
         // some server is active
@@ -135,6 +136,7 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd) {
                 break; // no servers are active now
             }
             tried_server_indexes.insert(*index);
+            current_server.store(*index);
 
             servers[*index].active_connections.fetch_add(1, std::memory_order_relaxed);
             backend_fd = setup_socket();
