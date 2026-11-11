@@ -66,10 +66,10 @@ int main(int argc, char * argv[]) {
          * line "\r\n\r\n" is received. 
          */
 
-        std::cout << "Received Request: " << std::endl << buffer << std::endl;
+        std::cout << "Received Request: " << std::endl << full_buffer << std::endl;
 
         std::string response; 
-        request_t request = parse_request(buffer); // parse the request
+        request_t request = parse_request(full_buffer); // parse the request
         if (request.method.empty()) {
             response = "HTTP/1.1 400 Bad Request"; // request was malformed
         } else {
