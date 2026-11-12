@@ -34,16 +34,27 @@ After building, the executables will be located in the `build/` directory
 ```bash
 # start the load balancer
 ./build/load_balancer <'round-robin' or 'least-connections'>
+# program will default to least-connections
 
 # in three seperate terminals, start the backend servers
 ./build/backend <port number> 
 ```
 
+### Testing
+
+This project uses CMake with GoogleTest.
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+
+cmake --build build
+
+ctest --test-dir build --output-on-failure
+```
+
 ## Known Issues
 
 * Unchecked I/O return values for write(), send(), and recv()
-
-* No framing on reads
 
 * Hardcoded MAX_NUM_SERVERS
 
