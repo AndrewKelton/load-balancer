@@ -95,74 +95,27 @@ void load_balancer::LoadBalancer::send_request_recv_response(int backend_fd, std
 
 void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in client_address) {
 
+    std::string response;
+
     // check if request is allowed first
     if (!rate_limiter_.allow_request(convert_binary_ip_address_to_string(client_address))) {
-        std::string response = 
+        response = 
             "HTTP/1.1 429 Too Many Requests\r\n"
             "Content-Type: text/plain\r\n"
             "Retry After: 60\r\n\r\n"; // change this to the actual retry after
-
-        // request is not allowed, so tell client first 
-        write(client_fd, response.c_str(), response.size());
-        close(client_fd);
-
-        return;
-    }
-
-    std::string client_buffer;
-    if (read_request(client_fd, client_buffer) <= 0) {
-        close(client_fd);
-        return; // maybe setup in future for a retry?
-    }
-
-    std::string response;
-    std::set<size_t> tried_server_indexes; // holds the indexes of servers tried to connect to
-    std::optional<size_t> index = strategy->get_server_index(servers, tried_server_indexes);
-    
-    if (!index) {
-        std::cerr << "No servers available." << std::endl;
-        response = 
-            "HTTP/1.1 503 Service Unavailable\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: 20\r\n\r\n"
-            "No Backend Available";
     } else {
+        std::string client_buffer;
 
-        tried_server_indexes.insert(*index); // insert tried server
-
-        servers[*index].active_connections.fetch_add(1, std::memory_order_relaxed);
-        current_server.store(*index);
-
-        int backend_fd = setup_socket();
-        // some server is active
-        sockaddr_in backend_address = create_address(servers[*index].port);
-
-        int connection_status = connect(backend_fd, (struct sockaddr*)&backend_address, sizeof(backend_address));
-
-        // fallback, try to find a server that will connect
-        bool close_connection = true;
-        int retries = 1;
-        while (retries < servers.size() && connection_status < 0) {
-            servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
-            close(backend_fd);
-            ++retries;
-
-            index = strategy->get_server_index(servers, tried_server_indexes);
-            if (!index) {
-                close_connection = false;
-                break; // no servers are active now
-            }
-            tried_server_indexes.insert(*index);
-            current_server.store(*index);
-
-            servers[*index].active_connections.fetch_add(1, std::memory_order_relaxed);
-            backend_fd = setup_socket();
-            backend_address = create_address(servers[*index].port);
-            connection_status = connect(backend_fd, (struct sockaddr*)&backend_address, sizeof(backend_address));
+        if (read_request(client_fd, client_buffer) <= 0) {
+            close(client_fd);
+            return; // maybe setup in future for a retry?
         }
 
-        if (connection_status < 0) {
-            std::cerr << "Could not connect to backend" << std::endl;
+        std::set<size_t> tried_server_indexes; // holds the indexes of servers tried to connect to
+        std::optional<size_t> index = strategy->get_server_index(servers, tried_server_indexes);
+        
+        if (!index) {
+            std::cerr << "No servers available." << std::endl;
             response = 
                 "HTTP/1.1 503 Service Unavailable\r\n"
                 "Content-Type: text/plain\r\n"
@@ -170,18 +123,61 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in cl
                 "No Backend Available";
         } else {
 
-            // send request and receive response to/from backend
-            send_request_recv_response(backend_fd, client_buffer, response);
-            servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
-        }
+            tried_server_indexes.insert(*index); // insert tried server
 
-        if (close_connection) {
-            close(backend_fd);
-        }
+            servers[*index].active_connections.fetch_add(1, std::memory_order_relaxed);
+            current_server.store(*index);
 
-        write(client_fd, response.c_str(), response.size());
-        close(client_fd);
+            int backend_fd = setup_socket();
+            // some server is active
+            sockaddr_in backend_address = create_address(servers[*index].port);
+
+            int connection_status = connect(backend_fd, (struct sockaddr*)&backend_address, sizeof(backend_address));
+
+            // fallback, try to find a server that will connect
+            bool close_connection = true;
+            int retries = 1;
+            while (retries < servers.size() && connection_status < 0) {
+                servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
+                close(backend_fd);
+                ++retries;
+
+                index = strategy->get_server_index(servers, tried_server_indexes);
+                if (!index) {
+                    close_connection = false;
+                    break; // no servers are active now
+                }
+                tried_server_indexes.insert(*index);
+                current_server.store(*index);
+
+                servers[*index].active_connections.fetch_add(1, std::memory_order_relaxed);
+                backend_fd = setup_socket();
+                backend_address = create_address(servers[*index].port);
+                connection_status = connect(backend_fd, (struct sockaddr*)&backend_address, sizeof(backend_address));
+            }
+
+            if (connection_status < 0) {
+                std::cerr << "Could not connect to backend" << std::endl;
+                response = 
+                    "HTTP/1.1 503 Service Unavailable\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Content-Length: 20\r\n\r\n"
+                    "No Backend Available";
+            } else {
+
+                // send request and receive response to/from backend
+                send_request_recv_response(backend_fd, client_buffer, response);
+                servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
+            }
+
+            if (close_connection) {
+                close(backend_fd);
+            }
+        }
     }
+
+    write(client_fd, response.c_str(), response.size());
+    close(client_fd);
 }
 
 std::string load_balancer::server_health_status_to_string(ServerHealthStatus status) {
