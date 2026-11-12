@@ -27,7 +27,7 @@ class TokenBucket {
 
     private:
         std::atomic<int> tokens;
-        std::__1::chrono::system_clock::time_point last_refill; // time the bucket was last refilled
+        std::chrono::system_clock::time_point last_refill; // time the bucket was last refilled
 
     public:
 
