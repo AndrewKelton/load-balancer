@@ -10,6 +10,7 @@ FetchContent_MakeAvailable(googletest)
 add_executable(unit_tests
     test_parse_request.cpp
     test_server_health_status_to_string.cpp
+    test_rate_limiter.cpp
 )
 
 target_link_libraries(unit_tests
