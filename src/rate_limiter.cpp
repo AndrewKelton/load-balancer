@@ -5,18 +5,21 @@
 bool TokenBucket::allow_request(int rate, int capacity) {
     auto now = std::chrono::system_clock::now();
 
+    auto prev = last_refill.load();
     /* calculate how much time has passed since last refill and 
      * refill the bucket with the minimum of capacity and that many
      * tokens + current tokens
      */
-    auto elapsed = now - last_refill;
+    auto elapsed = now - prev;
     std::chrono::duration<double> elapsed_seconds = elapsed;
     int elapsed_rate_refill = std::chrono::duration_cast<std::chrono::seconds>(elapsed_seconds * rate).count();
     
     int tmp_tokens = std::min(capacity, tokens + elapsed_rate_refill); // max tokens can be capacity
     tokens.store(tmp_tokens); // store current tokens in bucket
-
-    last_refill = now;
+    
+    if (elapsed_rate_refill > 0) {
+        last_refill.store(now);
+    }
 
     return try_consume_token();
 }
