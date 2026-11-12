@@ -27,13 +27,13 @@ class TokenBucket {
 
     private:
         std::atomic<int> tokens;
-        std::chrono::system_clock::time_point last_refill; // time the bucket was last refilled
+        std::atomic<std::chrono::system_clock::time_point> last_refill; // time the bucket was last refilled
 
     public:
 
         TokenBucket(int capacity) {
             tokens.store(capacity);
-            last_refill = std::chrono::system_clock::now();
+            last_refill.store(std::chrono::system_clock::now());
         }
 
         bool allow_request(int rate, int capacity);
