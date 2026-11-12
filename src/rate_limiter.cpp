@@ -35,6 +35,10 @@ bool TokenBucket::try_consume_token() {
     return false; // no tokens available
 }
 
+int TokenBucket::get_tokens() {
+    return tokens.load(std::memory_order_relaxed);
+}
+
 bool RateLimiter::allow_request(const std::string& ip_address) {
 
     std::shared_ptr<TokenBucket> bucket = nullptr;
@@ -65,3 +69,19 @@ bool RateLimiter::allow_request(const std::string& ip_address) {
     
     return bucket->allow_request(rate_, capacity_); // check if bucket has token
 }
+
+std::shared_ptr<TokenBucket> RateLimiter::get_bucket_from_ip(const std::string& ip_address) {
+
+    std::shared_ptr<TokenBucket> bucket = nullptr;
+    
+    { // read bucket from ip store
+        std::shared_lock<std::shared_mutex> read_lock(store_mtx);
+        auto it = ip_store.find(ip_address);
+        
+        if (it != ip_store.end()) {
+            bucket = it->second;
+        }
+    }
+
+    return bucket;
+}   

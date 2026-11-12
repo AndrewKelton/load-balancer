@@ -39,6 +39,9 @@ class TokenBucket {
         bool allow_request(double rate, int capacity);
 
         bool try_consume_token();
+
+        /* Returns number of tokens currently in the bucket */
+        int get_tokens();   
 };
 
 class RateLimiter {
@@ -59,6 +62,8 @@ class RateLimiter {
         RateLimiter(double rate, int capacity) : rate_(rate), capacity_(capacity) {}
 
         bool allow_request(const std::string& ip_address);
+
+        std::shared_ptr<TokenBucket> get_bucket_from_ip(const std::string& ip_address);
 };
 
 #endif
