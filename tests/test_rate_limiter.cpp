@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <thread>
+#include <atomic>
 
 TEST(RateLimit, RateLimiterAllowsRequests) {
 
