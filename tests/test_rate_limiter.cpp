@@ -20,7 +20,7 @@ TEST(RateLimit, RateLimiterAllowsRequests) {
 
 TEST(RateLimit, RateLimiterDeniesRequests) {
 
-    RateLimiter rate_limiter(0.0, 1);
+    RateLimiter rate_limiter(0, 1);
     
     EXPECT_EQ(rate_limiter.allow_request("10.0.0.1"), true);
     EXPECT_EQ(rate_limiter.allow_request("10.0.0.1"), false);
@@ -29,7 +29,7 @@ TEST(RateLimit, RateLimiterDeniesRequests) {
 
 TEST(RateLimit, RateLimiterConcurrentIPConsumption) {
     
-    RateLimiter rate_limiter(0.0, 3);
+    RateLimiter rate_limiter(0, 3);
     std::thread threads[3];
 
     std::atomic<int> allowed_requests = 0;
@@ -42,9 +42,9 @@ TEST(RateLimit, RateLimiterConcurrentIPConsumption) {
     }
 
     // ensure that bucket was not filled
-    // if (rate_limiter.allow_request("10.0.0.1")) {
-    //     allowed_requests.fetch_add(1);
-    // }
+    if (rate_limiter.allow_request("10.0.0.1")) {
+        allowed_requests.fetch_add(1);
+    }
 
     for (int i = 0; i < 3; ++i) {
         threads[i].join();
@@ -65,7 +65,7 @@ TEST(RateLimitBucket, RateLimitBucketRefills) {
 
 TEST(RateLimitBucket, RateLimitBucketRefillCapacity) {
 
-    RateLimiter rate_limiter(2.0, 2);
+    RateLimiter rate_limiter(2, 2);
 
     while (rate_limiter.allow_request("10.0.0.1")) {}
 

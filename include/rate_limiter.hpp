@@ -36,7 +36,7 @@ class TokenBucket {
             last_refill = std::chrono::system_clock::now();
         }
 
-        bool allow_request(double rate, int capacity);
+        bool allow_request(int rate, int capacity);
 
         bool try_consume_token();
 
@@ -50,14 +50,14 @@ class RateLimiter {
         
         std::unordered_map<std::string, std::shared_ptr<TokenBucket>> ip_store;
         std::shared_mutex store_mtx;
-        double rate_;
+        int rate_;
         int capacity_;
 
         // do rate limiter stuff here
 
     public:
 
-        RateLimiter() : rate_(2.0), capacity_(100) {}
+        RateLimiter() : rate_(2), capacity_(100) {}
 
         RateLimiter(double rate, int capacity) : rate_(rate), capacity_(capacity) {}
 
