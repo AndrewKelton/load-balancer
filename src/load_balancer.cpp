@@ -11,14 +11,26 @@
 #include <csignal>
 #include <cstdint>
 
-/* Next steps:
- * (2) Merge round_robin_server_delegator() and least_connections_server_delegator()
- * into one function. The only real difference is rr takes client_fd and current server idx,
- * while lc takes only client_fd. Also rr calls get_next_server_index_round_robin(), while lc calls
- * get_server_index_with_least_connections().
- */
-
 void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
+
+    // backoff health check when failure count > 0
+    if (server.failure_count > 0) {
+        auto now = std::chrono::system_clock::now();
+        auto last_time_checked = server.last_time_checked.load();
+
+        auto elapsed = now - last_time_checked;
+        std::chrono::duration<double> elapsed_seconds = elapsed;
+
+        // exponential backoff sort of
+        double backoff = (server.failure_count + 1) * (server.failure_count + 1);
+        if (elapsed_seconds.count() >= backoff) {
+            server.last_time_checked.store(now); // enough time has passed, check the health now
+            std::cout << "Server " << server.port << " is checking health." << std::endl;
+        } else {
+            std::cout << "Server " << server.port << " backing off for " << backoff - elapsed_seconds.count() << " more seconds." << std::endl;
+            return; // not enough time has passed, back off
+        }
+    }
 
     int server_socket = socket(AF_INET, SOCK_STREAM, 0);
     sockaddr_in address = create_address(server.port);
