@@ -7,6 +7,7 @@
 #include <iostream>
 #include <atomic>
 #include <netinet/in.h>
+#include <chrono>
 
 #define SMALL_BUFFER_SIZE 128
 #define LARGE_BUFFER_SIZE 1024
@@ -43,6 +44,7 @@ struct server_info_t {
     static_assert(std::atomic<ServerHealthStatus>::is_always_lock_free, 
         "ServerHealthStatus atomic must be lock free");
     std::atomic<int> active_connections = 0;
+    std::atomic<std::chrono::system_clock::time_point> last_time_checked;
 };
 
 /* Parses a request from the buffer and returns a request_t structure */
