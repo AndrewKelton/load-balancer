@@ -11,6 +11,8 @@ add_executable(unit_tests
     test_parse_request.cpp
     test_server_health_status_to_string.cpp
     test_rate_limiter.cpp
+    test_round_robin.cpp
+    test_least_connections.cpp
 )
 
 target_link_libraries(unit_tests
