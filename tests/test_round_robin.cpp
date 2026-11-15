@@ -22,7 +22,7 @@ TEST(RoundRobinDistribution, RoundRobinDistributesCorrectlyServersHealthy) {
     }
 
     std::set<size_t> tried;
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < TEST_NUM_SERVERS * 2; ++i) {
         EXPECT_EQ(round_robin.get_server_index(servers, tried), i % TEST_NUM_SERVERS);
     }
 }
