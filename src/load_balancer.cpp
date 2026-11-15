@@ -257,8 +257,10 @@ void load_balancer::LoadBalancer::print_load_balancer_info_worker(volatile std::
 
 bool load_balancer::LoadBalancer::start_load_balancer(volatile std::sig_atomic_t& g_running) {
 
-    // start listening for incoming connections
-    start_listen();
+    if (!server_is_listening()) { // server may already be listening
+        // start listening for incoming connections
+        start_listen();
+    }
 
     // create health check worker
     std::thread health_worker([this, &g_running]() {
