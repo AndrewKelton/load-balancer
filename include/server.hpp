@@ -27,9 +27,11 @@ class Server {
 
         int get_server_fd();
 
-        void set_port(int port);
-
+        bool server_is_listening();
+        
         sockaddr_in get_address();
+        
+        void set_port(int port);
 
         ssize_t read_request(int client_fd, std::string& full_client_buffer);
 
@@ -38,6 +40,7 @@ class Server {
         int port_;
         int server_fd_;
         sockaddr_in address_;
+        bool is_listening = false;
 };
 
 sockaddr_in create_address(int port);

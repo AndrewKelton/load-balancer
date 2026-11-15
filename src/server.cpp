@@ -58,6 +58,7 @@ bool Server::start_listen() {
         std::cerr << "Error listening for incoming connections" << std::endl;
         return false;
     }
+    is_listening = true;
 
     std::cout << "Server listening on port: " << port_ << std::endl;
 
@@ -86,6 +87,10 @@ int Server::get_port() {
 
 int Server::get_server_fd() {
     return server_fd_;
+}
+
+bool Server::server_is_listening() {
+    return is_listening;
 }
         
 sockaddr_in Server::get_address() {
