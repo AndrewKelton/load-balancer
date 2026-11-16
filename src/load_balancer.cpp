@@ -11,6 +11,14 @@
 #include <csignal>
 #include <cstdint>
 
+
+/* Need to update health check with Server logic, right now it still uses the 
+ * old methods before creating the Server class. Also, need to add a function
+ * to Server class that parses response looking for a specific thing perhaps?
+ * Or just use the function in utils.hpp to parse the response from server.
+ * Either way need to just standardize how I am reading, recieving, and sending
+ * responses to/from client + servers.
+ */
 void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
 
     // backoff health check when failure count > 0
@@ -31,8 +39,8 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
             return; // not enough time has passed, back off
         }
     }
-
-    int server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    
+    int server_socket = setup_socket();
     sockaddr_in address = create_address(server.port);
 
     if (connect(server_socket, (struct sockaddr*)&address, sizeof(address)) < 0) {
