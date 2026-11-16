@@ -4,7 +4,7 @@ URL="http://localhost:8080"
 ARGS=""
 
 # Generate the command arguments
-for i in {1..10}; do
+for i in {1..1000}; do
     ARGS="$ARGS $URL"
 done
 
