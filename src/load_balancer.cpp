@@ -150,6 +150,7 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in cl
             bool close_connection = true;
             int retries = 1;
             while (retries < servers.size() && connection_status < 0) {
+
                 servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
                 close(backend_fd);
                 ++retries;
@@ -179,11 +180,16 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in cl
 
                 // send request and receive response to/from backend
                 send_request_recv_response(backend_fd, client_buffer, response);
-                servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
             }
 
             if (close_connection) {
                 close(backend_fd);
+                /* Decrement active_connections here, connection_status may actually be 
+                 * less than 0, but that server may have incremented active_connections
+                 * in the while loop, but broke out of the while loop before decrementing 
+                 * again becauese retries >= servers.size() may have been met.
+                 */
+                servers[*index].active_connections.fetch_sub(1, std::memory_order_relaxed);
             }
         }
     }
