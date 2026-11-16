@@ -57,7 +57,7 @@ int main(int argc, char * argv[]) {
 
         // Read incoming request data
         std::string full_buffer;
-        char buffer[LARGE_BUFFER_SIZE] = {0};
+        // char buffer[LARGE_BUFFER_SIZE] = {0};
         if (server.read_request(client_fd, full_buffer) <= 0 ) {
             close(client_fd);
             continue;
