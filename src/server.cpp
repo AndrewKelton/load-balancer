@@ -9,13 +9,14 @@ int Server::setup_socket() {
 
     if (fd < 0) {
         std::cerr << "Socket creation failed" << std::endl;
-        return false;
+        return -1;
     }
 
     // set reuse address to true
     int optval = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
         std::cerr << "Error setting reuse socket" << std::endl;
+        close (fd);
         return -1;
     }
 
@@ -26,12 +27,14 @@ int Server::setup_socket() {
     // set timeout for receiving data
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
         std::cerr << "Error setting receive timeout" << std::endl;
+        close (fd);
         return -1;
     }
 
     // set timeout for sending data
     if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout)) < 0) {
         std::cerr << "Error setting send timeout" << std::endl;
+        close (fd);
         return -1;
     }
 
