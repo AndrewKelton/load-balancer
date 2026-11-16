@@ -45,7 +45,7 @@ jobs:
         run: >
           cmake -S . -B build 
           -DCMAKE_BUILD_TYPE=Debug
-          -DSANITIZER={{ matrix.sanitizer }}
+          -DSANITIZER=${{ matrix.sanitizer }}
       
       - name: Build
         run: cmake --build build --parallel
