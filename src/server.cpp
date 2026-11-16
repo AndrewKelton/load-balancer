@@ -4,6 +4,11 @@
 #include <iostream>
 #include <unistd.h>
 
+/* Need to refactor Server with a dedicated RAII socket class to
+ * automatically close file descriptor. Replace int server_fd_ w/
+ * UniqueSocket class for immediate cleanup of socket.
+ */
+
 int Server::setup_socket() {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
 
