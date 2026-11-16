@@ -50,6 +50,7 @@ bool Server::setup_server() {
 
     if (bind(server_fd_, (struct sockaddr*)&address_, sizeof(address_)) < 0) {
         std::cerr << "Error binding socket with IP and port" << std::endl;
+        close(server_fd_);
         return false;
     }
 
