@@ -14,12 +14,23 @@ bool TokenBucket::allow_request(int rate, int capacity) {
     auto elapsed = now - prev;
     std::chrono::duration<double> elapsed_seconds = elapsed;
     int elapsed_rate_refill = std::chrono::duration_cast<std::chrono::seconds>(elapsed_seconds * rate).count();
-    
-    int tmp_tokens = std::min(capacity, tokens + elapsed_rate_refill); // max tokens can be capacity
-    tokens.store(tmp_tokens); // store current tokens in bucket
-    
-    if (elapsed_rate_refill > 0) {
-        last_refill.store(now);
+
+    if (elapsed_rate_refill >= 1) {
+        // only one thread wins claim and adds the tokens
+        if (last_refill.compare_exchange_strong(prev, now)) {
+
+            int current_tokens = tokens.load(std::memory_order_relaxed);
+
+            /* keep trying until the swap succeeds; on failure, current_tokens
+             * is updated to the latest value and we recompute
+             */
+            while (!tokens.compare_exchange_weak(current_tokens, 
+                                                 std::min(capacity, current_tokens + elapsed_rate_refill),
+                                                 std::memory_order_release,
+                                                 std::memory_order_relaxed)) {
+                // empty body: compare_exchange_weak already reloads current_tokens
+            }
+        }
     }
 
     return try_consume_token();
