@@ -11,7 +11,6 @@
 #include <csignal>
 #include <cstdint>
 
-
 /* Need to update health check with Server logic, right now it still uses the 
  * old methods before creating the Server class. Also, need to add a function
  * to Server class that parses response looking for a specific thing perhaps?
@@ -114,6 +113,10 @@ void load_balancer::LoadBalancer::send_request_recv_response(int backend_fd, std
     }
 }
 
+int get_retry_after(std::shared_ptr<TokenBucket> token_bucket) {
+
+}
+
 void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in client_address) {
 
     std::string response;
@@ -123,7 +126,9 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in cl
         response = 
             "HTTP/1.1 429 Too Many Requests\r\n"
             "Content-Type: text/plain\r\n"
-            "Retry After: 60\r\n\r\n"; // change this to the actual retry after
+            "Retry-After: 1" // need to add the actual retry after seconds here
+            // just using 1 for now since the token bucket refills 2 tokens per second
+            "\r\n\r\n"; 
     } else {
         std::string client_buffer;
 
