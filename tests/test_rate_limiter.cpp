@@ -53,6 +53,32 @@ TEST(RateLimit, RateLimiterConcurrentIPConsumption) {
     EXPECT_EQ(allowed_requests, 3);
 }
 
+TEST(RateLimit, RateLimiterIPIsInStore) {
+
+    RateLimiter rate_limiter;
+    rate_limiter.allow_request("10.0.0.1");
+
+    EXPECT_NE(rate_limiter.get_bucket_from_ip("10.0.0.1"), nullptr);
+}
+
+TEST(RateLimit, RateLimiterIPNotInStore) {
+
+    RateLimiter rate_limiter;
+
+    EXPECT_EQ(rate_limiter.get_bucket_from_ip("10.0.0.1"), nullptr);
+}
+
+TEST(RateLimit, RateLimiterEvictsLRU) {
+
+    // refill rate = 2, bucket capacity = 100, ip store capacity = 1
+    RateLimiter rate_limiter(2, 100, 1);
+    rate_limiter.allow_request("10.0.0.1");
+    rate_limiter.allow_request("10.0.0.2");
+    
+    EXPECT_EQ(rate_limiter.get_bucket_from_ip("10.0.0.1"), nullptr);
+    EXPECT_NE(rate_limiter.get_bucket_from_ip("10.0.0.2"), nullptr);
+}
+
 TEST(RateLimitBucket, RateLimitBucketRefills) {
 
     RateLimiter rate_limiter;
