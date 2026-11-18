@@ -8,7 +8,7 @@
 #include <memory>
 #include <list>
 
-#define MAX_IP_STORE_CAPACITY 2 // set low for now to view how it works
+#define DEFAULT_IP_STORE_CAPACITY 2 // set low for now to view how it works
 
 /* Rate Limiter bucket, allows users application access if
  * they have a token available in their bucket. Tokens refill
@@ -70,12 +70,12 @@ class RateLimiter {
 
     public:
 
-        RateLimiter() : rate_(2), capacity_(100), ip_store_capacity_(5) {}
+        RateLimiter() : rate_(2), capacity_(100), ip_store_capacity_(DEFAULT_IP_STORE_CAPACITY) {}
 
         RateLimiter(int rate, int capacity) : 
             rate_(rate), 
             capacity_(capacity), 
-            ip_store_capacity_(5) {}
+            ip_store_capacity_(DEFAULT_IP_STORE_CAPACITY) {}
 
         RateLimiter(int rate, int capacity, size_t ip_store_capacity) : 
             rate_(rate), 
