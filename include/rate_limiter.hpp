@@ -47,7 +47,7 @@ class RateLimiter {
 
         RateLimiter() : rate_(2), capacity_(100) {}
 
-        RateLimiter(double rate, int capacity) : rate_(rate), capacity_(capacity) {}
+        RateLimiter(int rate, int capacity) : rate_(rate), capacity_(capacity) {}
 
         bool allow_request(const std::string& ip_address);
 
