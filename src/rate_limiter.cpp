@@ -44,49 +44,79 @@ int TokenBucket::get_tokens() {
     return tokens.load(std::memory_order_relaxed);
 }
 
-bool RateLimiter::allow_request(const std::string& ip_address) {
-
-    std::shared_ptr<TokenBucket> bucket = nullptr;
-
-    { // read bucket from ip store
-        std::shared_lock<std::shared_mutex> read_lock(store_mtx);
-        auto it = ip_store.find(ip_address);
-        
-        if (it != ip_store.end()) {
-            bucket = it->second;
-        }
-    }
-
-    // if ip is not in store, add it to store
-    if (!bucket) {
-        std::scoped_lock<std::shared_mutex> write_lock(store_mtx);
-
-        // double check to make sure no other thread added to store
-        auto it = ip_store.find(ip_address);
-
-        if (it == ip_store.end()) {
-            bucket = std::make_shared<TokenBucket>(capacity_);
-            ip_store[ip_address] = bucket;
-        } else {
-            bucket = it->second;
-        }
-    }
-    
-    return bucket->allow_request(rate_, capacity_); // check if bucket has token
-}
-
 std::shared_ptr<TokenBucket> RateLimiter::get_bucket_from_ip(const std::string& ip_address) {
 
     std::shared_ptr<TokenBucket> bucket = nullptr;
     
     { // read bucket from ip store
-        std::shared_lock<std::shared_mutex> read_lock(store_mtx);
-        auto it = ip_store.find(ip_address);
+        std::scoped_lock<std::shared_mutex> read_lock(store_mtx);
+        auto it = ip_store_.find(ip_address);
         
-        if (it != ip_store.end()) {
-            bucket = it->second;
+        if (it != ip_store_.end()) {
+            // move accessed ip to the front (mru position)
+            bucket = it->second->second;
+            ip_list_.erase(it->second);
+            ip_list_.push_front({ip_address, bucket});
+
+            // update iterator in map
+            ip_store_[ip_address] = ip_list_.begin();
         }
     }
 
     return bucket;
 }   
+
+bool RateLimiter::allow_request(const std::string& ip_address) {
+    
+    std::shared_ptr<TokenBucket> bucket = nullptr;
+    
+    { // read bucket from ip store
+        std::scoped_lock<std::shared_mutex> read_lock(store_mtx);
+
+        auto it = ip_store_.find(ip_address);
+        if (it != ip_store_.end()) {
+            bucket = it->second->second;
+
+            // move accessed node to the front of list (most recently used position)
+            ip_list_.erase(it->second);
+            ip_list_.push_front({ip_address, bucket});
+
+            // update the iterator in the map
+            ip_store_[ip_address] = ip_list_.begin();
+        }
+    }
+
+    if (!bucket) {
+        std::scoped_lock<std::shared_mutex> write_lock(store_mtx);
+
+        auto it = ip_store_.find(ip_address);
+
+        if (it == ip_store_.end()) {
+            bucket = std::make_shared<TokenBucket>(capacity_);
+            put(ip_address, bucket);
+        }
+    }
+
+    return bucket->allow_request(rate_, capacity_);
+}
+
+void RateLimiter::put(std::string ip, std::shared_ptr<TokenBucket> bucket) {
+
+    auto it = ip_store_.find(ip);
+    if (it != ip_store_.end()) {
+        // remove old node from the list and map
+        ip_list_.erase(it->second);
+        ip_store_.erase(it);
+    }
+
+    // insert new node at the front of the list
+    ip_list_.push_front({ip, bucket});
+    ip_store_[ip] = ip_list_.begin();
+
+    // if cache size exceeds the capacity, remove the least recently used ip
+    if (ip_store_.size() > ip_store_capacity_) {
+        auto last_ip = ip_list_.back().first;
+        ip_list_.pop_back();
+        ip_store_.erase(last_ip);
+    }
+}
