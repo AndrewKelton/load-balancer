@@ -1,6 +1,7 @@
 #include "rate_limiter.hpp"
 
 #include <mutex>
+#include <iostream>
 
 bool TokenBucket::allow_request(int rate, int capacity) {
     auto now = std::chrono::system_clock::now();
@@ -70,28 +71,17 @@ bool RateLimiter::allow_request(const std::string& ip_address) {
     
     std::shared_ptr<TokenBucket> bucket = nullptr;
     
-    { // read bucket from ip store
-        std::scoped_lock<std::shared_mutex> read_lock(store_mtx);
+    {
+        std::scoped_lock<std::shared_mutex> lock(store_mtx);
 
+        // read bucket from ip store
         auto it = ip_store_.find(ip_address);
         if (it != ip_store_.end()) {
             bucket = it->second->second;
-
-            // move accessed node to the front of list (most recently used position)
-            ip_list_.erase(it->second);
-            ip_list_.push_front({ip_address, bucket});
-
-            // update the iterator in the map
-            ip_store_[ip_address] = ip_list_.begin();
-        }
-    }
-
-    if (!bucket) {
-        std::scoped_lock<std::shared_mutex> write_lock(store_mtx);
-
-        auto it = ip_store_.find(ip_address);
-
-        if (it == ip_store_.end()) {
+            // move to front, the iterator stays valid
+            ip_list_.splice(ip_list_.begin(), ip_list_, it->second);
+        } else {
+            // create new bucket and put it on the store
             bucket = std::make_shared<TokenBucket>(capacity_);
             put(ip_address, bucket);
         }
@@ -104,6 +94,7 @@ void RateLimiter::put(std::string ip, std::shared_ptr<TokenBucket> bucket) {
 
     auto it = ip_store_.find(ip);
     if (it != ip_store_.end()) {
+
         // remove old node from the list and map
         ip_list_.erase(it->second);
         ip_store_.erase(it);
@@ -118,5 +109,7 @@ void RateLimiter::put(std::string ip, std::shared_ptr<TokenBucket> bucket) {
         auto last_ip = ip_list_.back().first;
         ip_list_.pop_back();
         ip_store_.erase(last_ip);
+
+        // std::cout << "Evicted" << last_ip << " from ip store.\n";
     }
 }
