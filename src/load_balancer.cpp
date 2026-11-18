@@ -113,10 +113,6 @@ void load_balancer::LoadBalancer::send_request_recv_response(int backend_fd, std
     }
 }
 
-int get_retry_after(std::shared_ptr<TokenBucket> token_bucket) {
-
-}
-
 void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in client_address) {
 
     std::string response;
