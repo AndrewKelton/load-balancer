@@ -69,6 +69,7 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
         std::string_view buffer_view = buffer;
         if (buffer_view.find("200") == std::string_view::npos) {
             server.status.store(ServerHealthStatus::FAILED);
+            ++server.failure_count;
         } else {
             server.status.store(ServerHealthStatus::OK); // ensures response was actually successful
         }
