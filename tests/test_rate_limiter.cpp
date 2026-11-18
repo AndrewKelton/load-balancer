@@ -5,6 +5,7 @@
 #include <chrono>
 #include <thread>
 #include <atomic>
+#include <latch>
 
 TEST(RateLimit, RateLimiterAllowsRequests) {
 
@@ -51,6 +52,34 @@ TEST(RateLimit, RateLimiterConcurrentIPConsumption) {
     }
 
     EXPECT_EQ(allowed_requests, 3);
+}
+
+TEST(RateLimit, RateLimiterConcurrentFirstRequestSameIP) {
+    /* Test checks that concurrent first requests don't crash */
+
+    constexpr int k_threads = 8;
+
+    for (int round = 0; round < 100; ++round) {
+        RateLimiter rate_limiter(0, k_threads);
+        std::latch start(k_threads);
+        std::atomic<int> allowed = 0;
+        std::vector<std::thread> threads;
+
+        for (int i = 0; i < k_threads; ++i) {
+            threads.emplace_back([&] {
+                start.arrive_and_wait(); // release all threads together
+                if (rate_limiter.allow_request("10.0.0.1")) {
+                    allowed.fetch_add(1);
+                }
+            });
+        }
+
+        for (auto& t : threads) {
+            t.join();
+        }
+
+        ASSERT_EQ(allowed, k_threads) << "round " << round;
+    }
 }
 
 TEST(RateLimit, RateLimiterIPIsInStore) {
