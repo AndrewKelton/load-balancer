@@ -13,6 +13,7 @@ add_executable(unit_tests
     test_rate_limiter.cpp
     test_round_robin.cpp
     test_least_connections.cpp
+    test_utils.cpp
 )
 
 target_link_libraries(unit_tests
