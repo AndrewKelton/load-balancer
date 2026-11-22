@@ -5,6 +5,10 @@
 #include <cstring>
 #include <unordered_map>
 #include <csignal>
+#include <string_view>
+#include <vector>
+#include <thread>
+#include <chrono>
 
 #include "utils.hpp"
 #include "server.hpp"
@@ -18,6 +22,32 @@ std::string get_response(request_t request, std::string port) {
     if (request.path_uri == "/health") {
         return "HTTP/1.1 200 OK\r\n"; // as of now just send healthy response
     } 
+
+    /* I need to make a stand alone function to do this later on... */
+    // split the request by its paramters and extract them
+    std::vector<std::string_view> parameters = split(request.path_uri, "?");
+
+    // std::vector<std::string_view> parameters = split(split(request.path_uri, "?")[1], "&");
+
+    // endpoint to sleep this server for x ms, max is 2900ms
+    if (request.path_uri.contains("/slow")) {
+        int sleep_time = 2900; // max is 2900 because the server times out after 3s
+        int length = 4;
+        if (parameters.size() > 1) {
+            std::vector<std::string_view> param_to_value = split(parameters[1], "=");
+
+            sleep_time = std::min(2900, to_int(param_to_value[1]).value());
+            length = static_cast<int>(param_to_value[1].size());
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+
+        return 
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plai\r\n"
+            "Content-Length: " + std::to_string(12 + length) + "\r\n\r\n"
+            "Slept for " + std::to_string(sleep_time) + "ms";
+    }
+
     std::string body = "Hello from port: " + port;
     return
         "HTTP/1.1 200 OK\r\n"
