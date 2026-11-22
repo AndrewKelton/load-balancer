@@ -5,24 +5,63 @@
 #include <algorithm>
 #include <cctype>
 #include <arpa/inet.h>
+#include <charconv>
+#include <cstddef>
 
 namespace {
-    /* Strip leading + trailing white space and tabs
+
+    /* "GET /path HTTP 1.1" -> method, path, version. Returns false if malformed 
      */
-    std::string_view trim(std::string_view s) {
+    bool parse_request_line(std::string_view line, request_t& request) {
 
-        const char * ws = " \t";
-        size_t start = s.find_first_not_of(ws);
-
-        if (start == std::string_view::npos) {
-            return {};
+        size_t sp1 = line.find(' ');
+        if (sp1 == std::string_view::npos) {
+            return false;
+        }
+        
+        size_t sp2 = line.find(' ', sp1 + 1);
+        if (sp2 == std::string_view::npos) {
+            return false;
         }
 
-        size_t end = s.find_last_not_of(ws);
-        return s.substr(start, end - start + 1);
+        request.method = std::string(line.substr(0, sp1));
+        request.path_uri = std::string(line.substr(sp1 + 1, sp2 - sp1 - 1));
+        request.version = std::string(line.substr(sp2 + 1));
+
+        return !request.method.empty() && !request.path_uri.empty() && !request.version.empty();
+    }
+}
+
+std::string_view trim(std::string_view str) {
+
+    const char * ws = " \t";
+    size_t start = str.find_first_not_of(ws);
+
+    if (start == std::string_view::npos) {
+        return {};
     }
 
-    /* Split the buffer into lines on "\n", dropping a trialing "\r" from each.
+    size_t end = str.find_last_not_of(ws);
+    return str.substr(start, end - start + 1);
+}
+
+std::vector<std::string_view> split(std::string_view str, std::string_view delimiter) {
+    std::vector<std::string_view> tokens;
+    size_t start = 0;
+
+    while (true) {
+        size_t end = str.find(delimiter, start);
+        if (end == std::string_view::npos) {
+            tokens.push_back(str.substr(start));
+            break;
+        }
+        tokens.push_back(str.substr(start, end - start));
+        start = end + delimiter.size();
+    }
+    return tokens;
+}
+
+/* Split the buffer into lines on "\n", dropping a trialing "\r" from each.
      * Stops at the first empty line (end of headers) or end of buffer.
      */
     std::vector<std::string_view> split_header_lines(std::string_view buffer) {
@@ -54,28 +93,6 @@ namespace {
 
         return lines;
     }
-
-    /* "GET /path HTTP 1.1" -> method, path, version. Returns false if malformed 
-     */
-    bool parse_request_line(std::string_view line, request_t& request) {
-
-        size_t sp1 = line.find(' ');
-        if (sp1 == std::string_view::npos) {
-            return false;
-        }
-        
-        size_t sp2 = line.find(' ', sp1 + 1);
-        if (sp2 == std::string_view::npos) {
-            return false;
-        }
-
-        request.method = std::string(line.substr(0, sp1));
-        request.path_uri = std::string(line.substr(sp1 + 1, sp2 - sp1 - 1));
-        request.version = std::string(line.substr(sp2 + 1));
-
-        return !request.method.empty() && !request.path_uri.empty() && !request.version.empty();
-    }
-}
 
 request_t parse_request(const std::string& buffer) {
     
@@ -115,4 +132,16 @@ std::string convert_binary_ip_address_to_string(const sockaddr_in& address) {
     inet_ntop(AF_INET, &address.sin_addr, ip, sizeof(ip));
     
     return ip;
+}
+
+std::optional<std::size_t> to_size_t(std::string_view str) {
+    
+    size_t value = 0;
+    auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), value);
+
+    if (ec == std::errc() && ptr == str.data() + str.size()) {
+        return value;
+    }
+
+    return std::nullopt;
 }
