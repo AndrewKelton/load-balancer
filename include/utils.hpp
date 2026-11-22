@@ -8,6 +8,7 @@
 #include <atomic>
 #include <netinet/in.h>
 #include <chrono>
+#include <optional>
 
 #define SMALL_BUFFER_SIZE 128
 #define LARGE_BUFFER_SIZE 1024
@@ -47,6 +48,14 @@ struct server_info_t {
     std::atomic<std::chrono::system_clock::time_point> last_time_checked;
 };
 
+/* Strip leading + trailing white space and tabs */
+std::string_view trim(std::string_view str);
+
+/* Splits a string by a delimiter and returns the string as an array*/
+std::vector<std::string_view> split(std::string_view str, std::string_view delimiter);
+
+std::vector<std::string_view> split_header_lines(std::string_view buffer);
+
 /* Parses a request from the buffer and returns a request_t structure */
 request_t parse_request(const std::string& buffer);
 
@@ -58,5 +67,8 @@ void to_lower(std::string& upper);
 
 /* Returns the string of a binary ip address */
 std::string convert_binary_ip_address_to_string(const sockaddr_in& address);
+
+/* Converts a string_view to size_t */
+std::optional<size_t> to_size_t(std::string_view str);
 
 #endif
