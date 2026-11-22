@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <unistd.h>
+#include <optional>
 
 /* Need to refactor Server with a dedicated RAII socket class to
  * automatically close file descriptor. Replace int server_fd_ w/
@@ -123,10 +124,13 @@ ssize_t Server::read_request(int client_fd, std::string& full_client_buffer) {
     
     std::string tmp_buffer;
     ssize_t total_bytes_read = 0;
+    size_t content_length = 0;
+    size_t content_bytes_read = 0;
+
     /* This now works and waits for the entire request from the user. However,
      * adding some sort of a max bytes read may be necessary. For now this works.
      */
-    while (tmp_buffer.find("\r\n\r\n") == std::string::npos) {
+    while (tmp_buffer.find("\r\n\r\n") == std::string::npos || (content_length > 0 && content_bytes_read < content_length)) {
         char client_buffer[LARGE_BUFFER_SIZE] = {0};
         ssize_t bytes_read = read(client_fd, client_buffer, LARGE_BUFFER_SIZE);
 
@@ -143,7 +147,25 @@ ssize_t Server::read_request(int client_fd, std::string& full_client_buffer) {
         }
 
         tmp_buffer.append(client_buffer, bytes_read);
-        total_bytes_read += bytes_read;
+        total_bytes_read += bytes_read; 
+        
+        /* This can honestly be done using parse_reqest from utils.hpp 
+         * but I just did this to get it working for now. Later I need
+         * to refactor the server to use the parse_request function.
+         */
+        if (content_length == 0) {
+            // parse the content-length
+            std::string local_tmp_buffer = client_buffer;
+            if (local_tmp_buffer.find("Content-Length") != std::string::npos) {
+                std::vector<std::string_view> content_split = split(local_tmp_buffer, ":");
+                content_length = to_size_t(trim(content_split[1])).value();
+            }
+        }
+
+        // ensures that we read all the bytes in Content-Length
+        if (content_length > 0 && tmp_buffer.find("\r\n\r\n") != std::string::npos) {
+            content_bytes_read += bytes_read;
+        }
     }
 
     full_client_buffer = tmp_buffer; // need to fix this later
