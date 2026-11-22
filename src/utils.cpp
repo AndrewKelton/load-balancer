@@ -145,3 +145,15 @@ std::optional<std::size_t> to_size_t(std::string_view str) {
 
     return std::nullopt;
 }
+
+std::optional<int> to_int(std::string_view str) {
+
+    int value = 0;
+    auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), value);
+
+    if (ec == std::errc() && ptr == str.data() + str.size()) {
+        return value;
+    }
+
+    return std::nullopt;
+}

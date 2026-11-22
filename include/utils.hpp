@@ -71,4 +71,7 @@ std::string convert_binary_ip_address_to_string(const sockaddr_in& address);
 /* Converts a string_view to size_t */
 std::optional<size_t> to_size_t(std::string_view str);
 
+/* Converts a string_view to int */
+std::optional<int> to_int(std::string_view str);
+
 #endif
