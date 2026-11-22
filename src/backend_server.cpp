@@ -43,7 +43,7 @@ std::string get_response(request_t request, std::string port) {
 
         return 
             "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/plai\r\n"
+            "Content-Type: text/plain\r\n"
             "Content-Length: " + std::to_string(12 + length) + "\r\n\r\n"
             "Slept for " + std::to_string(sleep_time) + "ms";
     }
