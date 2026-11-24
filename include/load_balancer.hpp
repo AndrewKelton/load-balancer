@@ -71,7 +71,7 @@ namespace load_balancer {
 
                 current_server = 0;
                 set_port(port);
-                servers = std::vector<server_info_t>(MAX_NUM_SERVERS);
+                servers = std::vector<server_info_t>(backend_ports.size());
                 
                 this->load_method = load_method;
                 to_lower(this->load_method);
@@ -84,7 +84,7 @@ namespace load_balancer {
 
                 rate_limiter_is_active_ = rate_limiter_is_active;
 
-                for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
+                for (int i = 0; i < backend_ports.size(); ++i) {
                     servers[i].port = backend_ports[i];
                 }
 

@@ -80,7 +80,7 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
 void load_balancer::LoadBalancer::health_checker(volatile std::sig_atomic_t& g_running) {
 
     while (g_running) {
-        for (size_t i = 0; i < MAX_NUM_SERVERS; ++i) {
+        for (size_t i = 0; i < servers.size(); ++i) {
             send_health_check(servers.at(i));
         }
 
