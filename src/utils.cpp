@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <charconv>
 #include <cstddef>
+#include <cstring>
 
 namespace {
 
@@ -166,15 +167,15 @@ command_line_setting_t parse_command_line(int argc, char ** argv) {
     bool is_strategy = true;
     for (int i = 1; i < argc; ++i) {
 
-        if (strcmp(argv[i], "--rate-limit") == 0) {
+        if (std::strcmp(argv[i], "--rate-limit") == 0) {
             is_rate_limit = true;
-        } else if (is_rate_limit && strcmp(argv[i], "off") == 0) {
+        } else if (is_rate_limit && std::strcmp(argv[i], "off") == 0) {
             // rate limiting is on by default so we can just ignore "on"
             settings.rate_limiting_active = false;
             is_rate_limit = false;
-        } else if (strcmp(argv[i], "--strategy") == 0) {
+        } else if (std::strcmp(argv[i], "--strategy") == 0) {
             is_strategy = true;
-        } else if (is_strategy && strcmp(argv[i], "round-robin") == 0) {
+        } else if (is_strategy && std::strcmp(argv[i], "round-robin") == 0) {
             // strategy is using "least-connections" by default, so we can ignore it
             settings.method = argv[i];
         }
