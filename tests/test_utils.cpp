@@ -63,3 +63,26 @@ TEST(Utils, ContentLengthIsFound) {
 // TEST(ConvertBinaryIpToString, ValidConversion) {
 // 
 // }
+
+TEST(CommandLine, ParsesValidCommandLineInput) {
+
+    char * argv1[5] = {"test", "--rate-limit", "off", "--strategy", "round-robin"};
+    command_line_setting_t settings = parse_command_line(5, argv1);
+    EXPECT_EQ(settings.method, "round-robin");
+    EXPECT_EQ(settings.rate_limiting_active, false);
+
+    char * argv2[3] = {"test", "--rate-limit", "off"};
+    settings = parse_command_line(3, argv2);
+    EXPECT_EQ(settings.method, "least-connections");
+    EXPECT_EQ(settings.rate_limiting_active, false);
+
+    char * argv3[3] = {"test", "--strategy", "round-robin"};
+    settings = parse_command_line(3, argv3);
+    EXPECT_EQ(settings.method, "round-robin");
+    EXPECT_EQ(settings.rate_limiting_active, true);
+
+    char * argv4[1] = {"test"};
+    settings = parse_command_line(1, argv4);
+    EXPECT_EQ(settings.method, "least-connections");
+    EXPECT_EQ(settings.rate_limiting_active, true);
+}
