@@ -40,6 +40,8 @@ namespace load_balancer {
             std::unique_ptr<SelectionStrategy> strategy;
             RateLimiter rate_limiter_;
 
+            bool rate_limiter_is_active_ = true;
+
             /* Connects to the server specified and sends a health check using 
             * the /health endpoint. If a server returns 200 OK, then that server
             * is considered HEALTHY, if it returns anything else, then it is DED.
@@ -65,7 +67,7 @@ namespace load_balancer {
 
         public:
 
-            LoadBalancer(std::vector<int> backend_ports, int port, std::string load_method) {
+            LoadBalancer(std::vector<int> backend_ports, int port, std::string load_method, bool rate_limiter_is_active) {
 
                 current_server = 0;
                 set_port(port);
@@ -79,6 +81,8 @@ namespace load_balancer {
                 } else {
                     strategy = std::make_unique<LeastConnections>(); // least connections by default
                 }
+
+                rate_limiter_is_active_ = rate_limiter_is_active;
 
                 for (int i = 0; i < MAX_NUM_SERVERS; ++i) {
                     servers[i].port = backend_ports[i];

@@ -118,7 +118,7 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in cl
     std::string response;
 
     // check if request is allowed first
-    if (!rate_limiter_.allow_request(convert_binary_ip_address_to_string(client_address))) {
+    if (rate_limiter_is_active_ && !rate_limiter_.allow_request(convert_binary_ip_address_to_string(client_address))) {
         response = 
             "HTTP/1.1 429 Too Many Requests\r\n"
             "Content-Type: text/plain\r\n"
