@@ -27,7 +27,7 @@ std::string get_response(request_t request, std::string port) {
     
     // what is our response for this endpoint
     if (request.path_uri == "/health") {
-        return "HTTP/1.1 200 OK\r\n"; // as of now just send healthy response
+        return "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"; // as of now just send healthy response
     } 
 
     /* I need to make a stand alone function to do this later on... */
@@ -48,11 +48,12 @@ std::string get_response(request_t request, std::string port) {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
 
+        std::string body = "Slept for " + std::to_string(sleep_time) + "ms";
         return 
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: text/plain\r\n"
-            "Content-Length: " + std::to_string(12 + length) + "\r\n\r\n"
-            "Slept for " + std::to_string(sleep_time) + "ms";
+            "Content-Length: " + std::to_string(body.size()) + "\r\n\r\n"
+            + body;
     }
 
     std::string body = "Hello from port: " + port;
@@ -76,7 +77,7 @@ void backend_server_worker(Server& server, int client_fd, sockaddr_in client_add
         std::string response; 
         request_t request = parse_request(client_buffer); // parse the request
         if (request.method.empty()) {
-            response = "HTTP/1.1 400 Bad Request"; // request was malformed
+            response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n"; // request was malformed
         } else {
             response = get_response(request, port_string); // get the response
         }
