@@ -73,7 +73,7 @@ void backend_server_worker(Server& server, int client_fd, sockaddr_in client_add
     if (server.read_request(client_fd, client_buffer) <= 0 ) {
         close(client_fd);
     } else {
-        std::cout << "Received Request: " << std::endl << client_buffer << std::endl;
+        // std::cout << "Received Request: " << std::endl << client_buffer << std::endl;
 
         std::string response; 
         request_t request = parse_request(client_buffer); // parse the request
@@ -83,6 +83,7 @@ void backend_server_worker(Server& server, int client_fd, sockaddr_in client_add
             response = get_response(request, port_string); // get the response
         }
 
+        // need to loop until everything is sent
         write(client_fd, response.c_str(), response.size());
         close(client_fd); // close connection for this request
     }
@@ -94,6 +95,8 @@ int main(int argc, char * argv[]) {
         std::cerr << "No port specified" << std::endl;
         return 1;
     }
+
+    // signal(SIGPIPE, SIG_IGN);
 
     // signal to stop server loop
     struct sigaction sa{};
