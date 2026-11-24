@@ -157,3 +157,27 @@ std::optional<int> to_int(std::string_view str) {
 
     return std::nullopt;
 }
+
+command_line_setting_t parse_command_line(int argc, char ** argv) {
+    
+    command_line_setting_t settings{};
+
+    bool is_rate_limit = false;
+    bool is_strategy = true;
+    for (int i = 1; i <= argc; ++i) {
+        if (argv[i] == "--rate-limit") {
+            is_rate_limit = true;
+        } else if (is_rate_limit && argv[i] == "off") {
+            // rate limiting is on by default so we can just ignore "on"
+            settings.rate_limiting_active = false;
+            is_rate_limit = false;
+        } else if (argv[i] == "--strategy") {
+            is_strategy = true;
+        } else if (is_strategy && argv[i] == "round-robin") {
+            // strategy is using "least-connections" by default, so we can ignore it
+            settings.method = argv[i];
+        }
+    }
+
+    return settings;
+}

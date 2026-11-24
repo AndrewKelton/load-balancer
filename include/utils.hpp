@@ -48,6 +48,12 @@ struct server_info_t {
     std::atomic<std::chrono::system_clock::time_point> last_time_checked;
 };
 
+/* struct holding settings passed in via command-line input */
+struct command_line_setting_t {
+    std::string method = "least-connections";
+    bool rate_limiting_active = true;
+};
+
 /* Strip leading + trailing white space and tabs */
 std::string_view trim(std::string_view str);
 
@@ -73,5 +79,7 @@ std::optional<size_t> to_size_t(std::string_view str);
 
 /* Converts a string_view to int */
 std::optional<int> to_int(std::string_view str);
+
+command_line_setting_t parse_command_line(int argc, char ** argv);
 
 #endif
