@@ -4,6 +4,8 @@
 #include <iostream>
 #include <unistd.h>
 #include <optional>
+#include <sys/socket.h>
+#include <cerrno>
 
 /* Need to refactor Server with a dedicated RAII socket class to
  * automatically close file descriptor. Replace int server_fd_ w/
@@ -171,4 +173,22 @@ ssize_t Server::read_request(int client_fd, std::string& full_client_buffer) {
     full_client_buffer = tmp_buffer; // need to fix this later
 
     return total_bytes_read;
+}
+
+bool send_all(int fd, const char * data, size_t len) {
+
+    while (len > 0) {
+        ssize_t n = ::send(fd, data, len, MSG_NOSIGNAL);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue; // interrupted, retry
+            }
+            return false; // peer gone, or some actual error
+        }
+
+        data += n;
+        len -= static_cast<size_t>(n);
+    }
+
+    return true;
 }

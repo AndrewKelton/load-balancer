@@ -43,6 +43,13 @@ class Server {
         bool is_listening = false;
 };
 
+/* Creates and returns a sockaddr_in address */
 sockaddr_in create_address(int port);
+
+/* Sends all bytes to fd until all bytes are sent. 
+ * Returns true if it was successful, and false if some
+ * error such as ::send() returning < 0 occurs.
+ */
+bool send_all(int fd, const char * data, size_t len);
 
 #endif
