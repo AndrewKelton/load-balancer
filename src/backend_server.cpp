@@ -42,9 +42,12 @@ std::string get_response(request_t request, std::string port) {
         int length = 4;
         if (parameters.size() > 1) {
             std::vector<std::string_view> param_to_value = split(parameters[1], "=");
-
-            sleep_time = std::min(2900, to_int(param_to_value[1]).value());
-            length = static_cast<int>(param_to_value[1].size());
+            
+            std::optional<int> sleep_parameter =  to_int(param_to_value[1]);
+            if (sleep_parameter != std::nullopt) {
+                sleep_time = std::min(2900, sleep_parameter.value());
+                length = static_cast<int>(param_to_value[1].size());
+            }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
 
@@ -65,8 +68,6 @@ std::string get_response(request_t request, std::string port) {
 }
 
 void backend_server_worker(Server& server, int client_fd, sockaddr_in client_address, std::string port_string) {
-
-    std::string response;
 
     std::string client_buffer;
     if (server.read_request(client_fd, client_buffer) <= 0 ) {
