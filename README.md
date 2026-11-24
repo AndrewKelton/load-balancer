@@ -56,8 +56,6 @@ ctest --test-dir build --output-on-failure
 
 * Unchecked I/O return values for write(), send(), and recv()
 
-* Hardcoded MAX_NUM_SERVERS
-
 * DEGRADED servers are ignored until they are marked OK again
 
 ## Authors
