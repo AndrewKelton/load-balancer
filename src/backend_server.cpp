@@ -1,3 +1,7 @@
+#include "utils.hpp"
+#include "server.hpp"
+#include "thread_pool.hpp"
+
 #include <iostream>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -9,12 +13,15 @@
 #include <vector>
 #include <thread>
 #include <chrono>
-
-#include "utils.hpp"
-#include "server.hpp"
+#include <functional>
 
 static volatile std::sig_atomic_t g_running = 1;
 static void on_sigint(int) { g_running = 0; }
+
+/* Need to add multiple backend workers to handle requests. Right now the
+ * thread pool thing you have going does not work. It doesn't return anything.
+ * See how we are doing it in load_balancer.cpp
+ */
 
 std::string get_response(request_t request, std::string port) {
     
@@ -56,6 +63,29 @@ std::string get_response(request_t request, std::string port) {
         "\r\n" + body;
 }
 
+void backend_server_worker(Server& server, int client_fd, sockaddr_in client_address, std::string port_string) {
+
+    std::string response;
+
+    std::string client_buffer;
+    if (server.read_request(client_fd, client_buffer) <= 0 ) {
+        close(client_fd);
+    } else {
+        std::cout << "Received Request: " << std::endl << client_buffer << std::endl;
+
+        std::string response; 
+        request_t request = parse_request(client_buffer); // parse the request
+        if (request.method.empty()) {
+            response = "HTTP/1.1 400 Bad Request"; // request was malformed
+        } else {
+            response = get_response(request, port_string); // get the response
+        }
+
+        write(client_fd, response.c_str(), response.size());
+        close(client_fd); // close connection for this request
+    }
+}
+
 int main(int argc, char * argv[]) {
 
     if (argc < 2) {
@@ -77,37 +107,24 @@ int main(int argc, char * argv[]) {
     server.setup_server();
     server.start_listen();
 
+    // create worker threads
+    ThreadPool pool;
+
     // 4. Accept a connection loop
     while (g_running) {
         
-        auto [client_fd, client_address] = server.accept_connection();
-        if (client_fd < 0) {
+        auto [fd, addr] = server.accept_connection();
+        if (fd < 0) {
             continue;
         }
 
-        // Read incoming request data
-        std::string full_buffer;
-        // char buffer[LARGE_BUFFER_SIZE] = {0};
-        if (server.read_request(client_fd, full_buffer) <= 0 ) {
-            close(client_fd);
-            continue;
-        }
-        /* Have to do this differently for read(), need to read until blank
-         * line "\r\n\r\n" is received. 
-         */
+        int client_fd = fd;
+        sockaddr_in client_address = addr;
 
-        std::cout << "Received Request: " << std::endl << full_buffer << std::endl;
-
-        std::string response; 
-        request_t request = parse_request(full_buffer); // parse the request
-        if (request.method.empty()) {
-            response = "HTTP/1.1 400 Bad Request"; // request was malformed
-        } else {
-            response = get_response(request, port_string); // get the response
-        }
-
-        write(client_fd, response.c_str(), response.size());
-        close(client_fd); // close connection for this request
+        // enqueue worker with client request
+        pool.enqueue([&server, client_fd, client_address, port_string] {
+            backend_server_worker(server, client_fd, client_address, port_string);
+        });
     }
 
     close(server.get_server_fd()); // close server socket
