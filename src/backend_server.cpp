@@ -45,7 +45,8 @@ std::string get_response(request_t request, std::string port) {
             
             std::optional<int> sleep_parameter =  to_int(param_to_value[1]);
             if (sleep_parameter != std::nullopt) {
-                sleep_time = std::min(2900, sleep_parameter.value());
+                int sleep_parameter_value = sleep_parameter.value();
+                sleep_time = std::min(2900, sleep_parameter_value < 0 ? -sleep_parameter_value : sleep_parameter_value);
                 length = static_cast<int>(param_to_value[1].size());
             }
         }
