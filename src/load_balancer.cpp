@@ -40,7 +40,7 @@ void load_balancer::LoadBalancer::send_health_check(server_info_t& server) {
     }
     
     int server_socket = setup_socket();
-    sockaddr_in address = create_address(server.port);
+    sockaddr_in address = create_address(server.port).value();
 
     if (connect(server_socket, (struct sockaddr*)&address, sizeof(address)) < 0) {
         
@@ -152,7 +152,7 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in cl
 
             int backend_fd = setup_socket();
             // some server is active
-            sockaddr_in backend_address = create_address(servers[*index].port);
+            sockaddr_in backend_address = create_address(servers[*index].port).value();
 
             int connection_status = connect(backend_fd, (struct sockaddr*)&backend_address, sizeof(backend_address));
 
@@ -175,7 +175,7 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in cl
 
                 servers[*index].active_connections.fetch_add(1, std::memory_order_relaxed);
                 backend_fd = setup_socket();
-                backend_address = create_address(servers[*index].port);
+                backend_address = create_address(servers[*index].port).value();
                 connection_status = connect(backend_fd, (struct sockaddr*)&backend_address, sizeof(backend_address));
             }
 
