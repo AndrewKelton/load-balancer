@@ -54,7 +54,7 @@ ctest --test-dir build --output-on-failure
 
 ## Known Issues
 
-* Unchecked I/O return values for write(), send(), and recv()
+* Unchecked I/O return values for send() and recv()
 
 * DEGRADED servers are ignored until they are marked OK again
 

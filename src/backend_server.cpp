@@ -84,7 +84,7 @@ void backend_server_worker(Server& server, int client_fd, sockaddr_in client_add
         }
 
         // need to loop until everything is sent
-        write(client_fd, response.c_str(), response.size());
+        send_all(client_fd, response.c_str(), response.size());
         close(client_fd); // close connection for this request
     }
 }
@@ -96,7 +96,7 @@ int main(int argc, char * argv[]) {
         return 1;
     }
 
-    // signal(SIGPIPE, SIG_IGN);
+    signal(SIGPIPE, SIG_IGN);
 
     // signal to stop server loop
     struct sigaction sa{};

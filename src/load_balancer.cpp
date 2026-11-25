@@ -204,7 +204,7 @@ void load_balancer::LoadBalancer::server_delegator(int client_fd, sockaddr_in cl
         }
     }
 
-    write(client_fd, response.c_str(), response.size());
+    send_all(client_fd, response.c_str(), response.size());
     close(client_fd);
 }
 
