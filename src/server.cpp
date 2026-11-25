@@ -3,7 +3,6 @@
 
 #include <iostream>
 #include <unistd.h>
-#include <optional>
 #include <sys/socket.h>
 #include <cerrno>
 
@@ -53,7 +52,14 @@ bool Server::setup_server() {
 
     server_fd_ = setup_socket();
     
-    address_ = create_address(port_);
+    std::optional<sockaddr_in> address = create_address(port_);
+    if (address == std::nullopt) {
+        std::cerr << "Error creating address with port " << port_ << std::endl;
+        close(server_fd_);
+        return false;
+    }
+
+    address_ = address.value();
     address_.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_fd_, (struct sockaddr*)&address_, sizeof(address_)) < 0) {
@@ -113,15 +119,6 @@ void Server::set_port(int port) {
     port_ = port;
 }
 
-sockaddr_in create_address(int port) {
-
-    sockaddr_in address = {};
-    address.sin_family = AF_INET;
-    address.sin_port = htons(port);
-
-    return address;
-}
-
 ssize_t Server::read_request(int client_fd, std::string& full_client_buffer) {
     
     std::string tmp_buffer;
@@ -173,6 +170,20 @@ ssize_t Server::read_request(int client_fd, std::string& full_client_buffer) {
     full_client_buffer = tmp_buffer; // need to fix this later
 
     return total_bytes_read;
+}
+
+std::optional<sockaddr_in> create_address(int port) {
+
+    if (port <= 0) {
+        std::cerr << "Invalid port input, cannot create address." << std::endl;
+        return std::nullopt;
+    }
+
+    sockaddr_in address = {};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+
+    return address;
 }
 
 bool send_all(int fd, const char * data, size_t len) {

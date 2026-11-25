@@ -3,6 +3,7 @@
 
 #include <netinet/in.h>
 #include <string>
+#include <optional>
 
 class Server {
 
@@ -44,7 +45,7 @@ class Server {
 };
 
 /* Creates and returns a sockaddr_in address */
-sockaddr_in create_address(int port);
+std::optional<sockaddr_in> create_address(int port);
 
 /* Sends all bytes to fd until all bytes are sent. 
  * Returns true if it was successful, and false if some
